@@ -6,9 +6,10 @@
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-function Test-Endpoint($url, $name, $hint) {
+function Test-Endpoint($url, $name, $hint, $headers) {
     try {
-        Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3 | Out-Null
+        if ($null -eq $headers) { $headers = @{} }
+        Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing -TimeoutSec 3 | Out-Null
         Write-Host "[OK] $name" -ForegroundColor Green
         return $true
     } catch {
@@ -49,21 +50,24 @@ if (Test-Endpoint "http://127.0.0.1:11500/api/version" "Ollama (g24 :11500 via t
 
 # 2. fcc-server — 落ちていたら別窓(最小化)で自動起動する。
 #    ログが見える・止めたければその窓を閉じればよい、を優先して隠しにはしない。
+#    注意: /v1/models は認証必須。ヘッダなしで叩くと 401 が返り「生きているのに死んだ」と
+#    誤判定し、二重起動→ポート衝突の連鎖になる(2026-07-11 実際に発生)。
+$fccHeaders = @{ "x-api-key" = "fablet-local" }
 try {
-    Invoke-WebRequest -Uri "http://127.0.0.1:8082/v1/models" -UseBasicParsing -TimeoutSec 2 | Out-Null
+    Invoke-WebRequest -Uri "http://127.0.0.1:8082/v1/models" -Headers $fccHeaders -UseBasicParsing -TimeoutSec 2 | Out-Null
 } catch {
     Write-Host "[..] fcc-server 未起動 — 最小化ウィンドウで自動起動する" -ForegroundColor Yellow
     Start-Process fcc-server -WindowStyle Minimized
     foreach ($i in 1..10) {
         Start-Sleep -Seconds 2
         try {
-            Invoke-WebRequest -Uri "http://127.0.0.1:8082/v1/models" -UseBasicParsing -TimeoutSec 2 | Out-Null
+            Invoke-WebRequest -Uri "http://127.0.0.1:8082/v1/models" -Headers $fccHeaders -UseBasicParsing -TimeoutSec 2 | Out-Null
             break
         } catch {}
     }
 }
 if (-not (Test-Endpoint "http://127.0.0.1:8082/v1/models" "fcc-server (:8082)" `
-    "自動起動も失敗。別ターミナルで fcc-server を実行し、エラー出力を確認すること")) { $ok = $false }
+    "自動起動も失敗。別ターミナルで fcc-server を実行し、エラー出力を確認すること" $fccHeaders)) { $ok = $false }
 
 if (-not $ok) {
     Write-Host "`n経路が死んでいる。上の指示で復旧してから再実行すること。" -ForegroundColor Yellow
