@@ -1,0 +1,7 @@
+FROM gpt-oss:120b
+
+# SYSTEM は意図的に定義しない。Claude Code が system prompt を供給する。
+# ここに SYSTEM を置くと会話先頭に二重挿入され、ツール呼び出しを阻害する。
+
+PARAMETER num_ctx 131072
+PARAMETER temperature 1.0

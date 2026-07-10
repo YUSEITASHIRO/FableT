@@ -1,0 +1,7 @@
+FROM gpt-oss:20b
+
+# SYSTEM なし(Claude Code の Haiku tier 用)
+
+# 32768 では Claude Code の Haiku tier 内部処理が黙って切り捨てられうる(OFFICE.md P4)
+PARAMETER num_ctx 65536
+PARAMETER temperature 1.0

@@ -1,0 +1,7 @@
+# シークレットは絶対にコミットしない (OFFICE.md P1)
+.env
+*.env
+!.env.example
+
+# ローカル生成物
+*.log
