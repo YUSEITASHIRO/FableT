@@ -1,0 +1,7 @@
+FROM qwen3:30b-a3b
+
+# SYSTEM なし(Claude Code が供給)。sonnet/haiku tier 用の高速モデル。
+# 120B(opus)との同時常駐を前提に num_ctx は 65536 に抑える。
+
+PARAMETER num_ctx 65536
+PARAMETER temperature 0.7
