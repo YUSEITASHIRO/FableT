@@ -20,8 +20,23 @@ function Test-Endpoint($url, $name, $hint) {
 $ok = $true
 
 # 1. SSH トンネル → g24 ユーザー空間 Ollama
+#    落ちていたら自動で張る。ssh -N は「転送だけして返ってこない」のが正常動作なので
+#    隠しプロセスとして起動する(鍵認証が前提。パスワード認証だと失敗する)。
+try {
+    Invoke-WebRequest -Uri "http://127.0.0.1:11500/api/version" -UseBasicParsing -TimeoutSec 2 | Out-Null
+} catch {
+    Write-Host "[..] トンネル未接続 — 自動起動を試みる" -ForegroundColor Yellow
+    Start-Process ssh -ArgumentList "-o","ExitOnForwardFailure=yes","-N","-L","127.0.0.1:11500:localhost:11500","g24" -WindowStyle Hidden
+    foreach ($i in 1..8) {
+        Start-Sleep -Seconds 2
+        try {
+            Invoke-WebRequest -Uri "http://127.0.0.1:11500/api/version" -UseBasicParsing -TimeoutSec 2 | Out-Null
+            break
+        } catch {}
+    }
+}
 if (Test-Endpoint "http://127.0.0.1:11500/api/version" "Ollama (g24 :11500 via tunnel)" `
-    "別ターミナルで: ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:11500:localhost:11500 g24") {
+    "自動起動も失敗。g24側のOllamaが停止している可能性: ssh g24 で入り setsid nohup ~/ollama-dist/start.sh を実行 (IMPLEMENTATION.md)") {
     # fablet-code がモデル一覧に居るか(居なければローカル Ollama を見ている疑い)
     $tags = (Invoke-WebRequest -Uri "http://127.0.0.1:11500/api/tags" -UseBasicParsing -TimeoutSec 5).Content
     if ($tags -notmatch "fablet-code") {
@@ -47,7 +62,7 @@ $fableCore = Get-Content (Join-Path $here "fable-coding.txt") -Raw
 $env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8082"
 $env:ANTHROPIC_AUTH_TOKEN = "fablet-local"
 $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY = "1"
-$env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = "120000"   # num_ctx 131072 より小さく (DESIGN.md 5章)
+$env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = "80000"    # 131kまで使えるが、プレフィル時間はターン毎に文脈長に比例して伸びる。80kで頭打ちにする
 
 Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model でモデル切替。`n" -ForegroundColor Cyan
 claude --append-system-prompt $fableCore @args
