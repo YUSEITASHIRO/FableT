@@ -12,7 +12,7 @@
 | `Modelfile.fable-t` | ローカル → g24 | `fable-t` の定義(SYSTEMなし・131k ctx) |
 | `Modelfile.fable-t-mid` | ローカル → g24 | `fable-t-mid` の定義(SYSTEMなし・65k ctx) |
 | `Modelfile.fast` | ローカル → g24 | `fablet-fast` の定義(Haiku tier用) |
-| `fable-t` / `fable-t-mid` / `fable-t-o` / `fable-t-mid-o` / `fablet-fast` | g24 | Ollamaモデル(`-o` は `ollama cp` による別名タグ) |
+| `fable-t` / `fable-t-mid` / `fable-t-o` / `fablet-fast` | g24 | Ollamaモデル(`fable-t-o` は `ollama cp` による `fable-t` の別名タグ。`/office`の7役全員がこれを使う) |
 | `fcc-server` | Windows | Anthropic API 互換プロキシ |
 | `~/.fcc/.env` | Windows | ルーティングと接続設定 |
 | `fablet-chat`(旧 `fablet`) | g24 | チャット用途に残す人格モデル |
@@ -193,7 +193,6 @@ ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; cd ~/fablet \
   && ~/ollama-dist/bin/ollama create fable-t-mid -f Modelfile.fable-t-mid \
   && ~/ollama-dist/bin/ollama create fablet-fast -f Modelfile.fast \
   && ~/ollama-dist/bin/ollama cp fable-t fable-t-o \
-  && ~/ollama-dist/bin/ollama cp fable-t-mid fable-t-mid-o \
   && ~/ollama-dist/bin/ollama list | grep fable"
 ```
 
@@ -269,7 +268,7 @@ MODEL_HAIKU=ollama/fable-t-mid
 EOF
 ```
 
-> `/office` 会議のサブエージェント(`.claude/agents/*.md`)は tier を介さず、`model:` に `ollama/fable-t-o` / `ollama/fable-t-mid-o` を直接指定して呼ばれる。主セッションの tier 割り当てとは独立している。
+> `/office` 会議のサブエージェント(`.claude/agents/*.md`)は tier を介さず、7役全員が `model: ollama/fable-t-o` を直接指定して呼ばれる。役ごとにモデルを分けず、主セッションの tier 割り当てとも独立している。
 
 クラウド無料枠へ切り替える場合は `NVIDIA_NIM_API_KEY` 等を足し、`MODEL_OPUS` だけを差し替える。**業務コードでは既定でローカル(`ollama/`)のみを使い、戻し忘れに注意する**([DESIGN.md 4.1](DESIGN.md))。
 

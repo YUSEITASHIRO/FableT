@@ -76,18 +76,17 @@ ssh g24 "setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /
 - **`/office` と7エージェントは FableT のプロジェクト設定**(`.claude\agents\` と `.claude\commands\office.md`)。作業先プロジェクトでも使うには、この2つをそのプロジェクトの `.claude\` へコピーする。全プロジェクト共通にしたければユーザーホームの `.claude\agents\` / `.claude\commands\` に置く
 - セッションを開いたまま別ディレクトリも触りたいときは、セッション内で `/add-dir <パス>` を使う
 
-## モデル構成 — 4つの名前
+## モデル構成 — 3つの名前
 
-Claude Code の `/model` ピッカーは仕様上 `Opus` / `Sonnet` / `Haiku` という組込みラベルを常に表示し、これを非表示にする設定は存在しない(調査確認済み)。そこで FableT は、**中身が何であるかを紛らわしくしないために、tier とは別に固有の名前を4つ用意する**:
+Claude Code の `/model` ピッカーは仕様上 `Opus` / `Sonnet` / `Haiku` という組込みラベルを常に表示し、これを非表示にする設定は存在しない(調査確認済み)。そこで FableT は、**中身が何であるかを紛らわしくしないために、tier とは別に固有の名前を用意する**:
 
 | モデル名 | 実体 | 呼ばれる場面 |
 |---|---|---|
 | `fable-t` | gpt-oss:120b | 主セッションの opus tier。難しい設計判断・複雑な実装 |
 | `fable-t-mid` | qwen3:30b-a3b(MoE) | 主セッションの sonnet / haiku tier(既定)。日常のコーディング。速い |
-| `fable-t-o` | `fable-t` と同じ重み | `/office` 会議の提案者・新規提案・作業者(書込み権限を持つ役) |
-| `fable-t-mid-o` | `fable-t-mid` と同じ重み | `/office` 会議のクライアント・ファクトチェック・効率厨・保守運用(審査役) |
+| `fable-t-o` | `fable-t` と同じ重み | `/office` 会議の**全7役が共通で使う**。提案者も作業者もクライアントも審査役も、同じ卓・同じモデルで議論する |
 
-`-o` は tier 経由ではなく、`.claude/agents/*.md` の `model:` にゲートウェイ名(`ollama/fable-t-o` 等)を直書きして呼ばれる。`ollama cp` で重みを共有した別名タグなので、追加のディスク・VRAM消費はない。**あなたが `/model` で直接選ぶのは `fable-t` / `fable-t-mid` の2つ**で、`-o` の2つは `/office` 実行中に裏で自動的に使われる。
+`fable-t-o` は tier 経由ではなく、`.claude/agents/*.md` の `model:` にゲートウェイ名(`ollama/fable-t-o`)を直書きして7役全員に指定される。`ollama cp` で `fable-t` と重みを共有した別名タグなので、追加のディスク・VRAM消費はない。**会議の役ごとにモデルを分けない**——役割で判断の重みが変わるのは不自然なので、7役とも同じモデルで発言する。**あなたが `/model` で直接選ぶのは `fable-t` / `fable-t-mid` の2つ**で、`fable-t-o` は `/office` 実行中に裏で自動的に使われる。
 
 セッション内での切替:
 
@@ -142,10 +141,12 @@ fablet
 
 進行(詳細は [.claude/commands/office.md](.claude/commands/office.md)):
 
-1. **クライアント**(`fable-t-mid-o`)が受入条件を3〜5個に固定(以後の唯一の合否基準)
-2. **提案者**(`fable-t-o`)が方針A、**新規提案**(`fable-t-o`)が前提の異なる対案Bを提出
-3. **ファクトチェック**・**効率厨**・**保守運用**(いずれも `fable-t-mid-o`)が両案を審査
-4. PM(主セッション)が統合判断 → **作業者**(`fable-t-o`)が実装と検証ループ → クライアントが検収
+1. **クライアント**が受入条件を3〜5個に固定(以後の唯一の合否基準)
+2. **提案者**が方針A、**新規提案**が前提の異なる対案Bを提出
+3. **ファクトチェック**・**効率厨**・**保守運用**が両案を審査
+4. PM(主セッション)が統合判断 → **作業者**が実装と検証ループ → クライアントが検収
+
+7役全員、同じ `fable-t-o` で発言する(役ごとにモデルを分けない)。
 
 書込み権限を持つのは作業者だけ。レビュー役は読取専用なので、構造的に暴走できない。**自明なタスク(typo修正・1行変更など)は会議を自動省略し、PM(主セッション)が直接実装する**ので、些末な依頼まで会議を挟んで待たされることはない。
 
@@ -227,4 +228,4 @@ fablet
 
 - Windows 11 + Claude Code CLI + uv + 鍵認証済みの `ssh g24`
 - g24: ユーザー空間 Ollama **0.20 以上**(`~/ollama-dist`、`:11500`、flash attention + KV q8_0)
-- モデル: `fable-t`(gpt-oss:120b, 131k ctx)/ `fable-t-mid`(qwen3:30b-a3b, 64k ctx)/ `fable-t-o`・`fable-t-mid-o`(同重み・`/office`専用エイリアス)/ `fablet-fast`(gpt-oss:20b, 64k ctx・予備)/ `fablet-chat`(人格入り・相談用)
+- モデル: `fable-t`(gpt-oss:120b, 131k ctx)/ `fable-t-mid`(qwen3:30b-a3b, 64k ctx)/ `fable-t-o`(`fable-t`と同重み・`/office`全役共通エイリアス)/ `fablet-fast`(gpt-oss:20b, 64k ctx・予備)/ `fablet-chat`(人格入り・相談用)

@@ -17,11 +17,11 @@ IMPLEMENTATION.md を参照。
 - Ollama は g24 のユーザー空間版(:11500、SSHトンネル経由)。:11434 は
   Windows ローカルの別物。疎通確認は必ず `127.0.0.1` で行う(localhost は
   IPv6 に逃げて別物を見ることがある)。
-- モデルは4種: `fable-t`(120B)/ `fable-t-mid`(30B)/ `fable-t-o`・`fable-t-mid-o`
-  (同じ重みの `/office` 専用エイリアス)。主セッションは opus → `fable-t`、
-  sonnet/haiku → `fable-t-mid`(fcc の tier 割り当ては ~/.fcc/.env)。
-  `.claude/agents/*.md` の各役は `model:` に `ollama/fable-t-o` /
-  `ollama/fable-t-mid-o` を直接指定し、主セッションと別枠で動く。
+- モデルは3種: `fable-t`(120B)/ `fable-t-mid`(30B)/ `fable-t-o`
+  (`fable-t`と同じ重みの `/office` 専用エイリアス)。主セッションは
+  opus → `fable-t`、sonnet/haiku → `fable-t-mid`(fcc の tier 割り当ては
+  ~/.fcc/.env)。`/office` の7役は全員 `.claude/agents/*.md` の `model:`
+  に `ollama/fable-t-o` を直接指定し、役ごとに分けず同じモデルで発言する。
 - `.env` などのシークレットをコミット・表示・外部送信しない。
 - **g24 は共用 GPU 機。汚さないことは機能要件である。** セッション終了時は必ず
   ./cleanup.sh を実行し、モデルのアンロード(VRAM/RAM解放)まで確認する。

@@ -14,7 +14,7 @@ set -euo pipefail
 
 HOST=g24
 PORT=11500
-OWNED="fable-t fable-t-mid fable-t-o fable-t-mid-o fablet-fast fablet-chat"   # FableT が作成したモデルのみ
+OWNED="fable-t fable-t-mid fable-t-o fablet-fast fablet-chat"   # FableT が作成したモデルのみ
 OL="OLLAMA_HOST=127.0.0.1:$PORT \$HOME/ollama-dist/bin/ollama"
 
 echo "=== 現在ロード中(:$PORT)==="
