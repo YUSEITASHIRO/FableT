@@ -11,6 +11,7 @@ Claude Code CLI をローカルプロキシ経由で共有 GPU 機 g24 の Ollam
 - **🛠 Claude Code のフル機能** — Read/Edit/Bash/Glob などのツール群、検証ループ、サブエージェント、コンパクションはすべて本物のハーネス。モデルだけがローカル
 - **🏢 オフィス型マルチエージェント** — 提案者・新規提案・クライアント・ファクトチェック・効率厨・保守運用・作業者の7役が議論し、受入条件を固定してから実装・検収する
 - **⚡ 実測性能** — プレフィル約5,000 tok/s、生成150 tok/s(2026-07-11 実測)。日常応答は数秒
+- **📊 ベンチ実証済み** — 350問ベンチ(2026-07-11)で fablet-code は **89.7%**。OpenAI フラッグシップ gpt-5.4(88.3%)と Claude Sonnet(86.0%)を追加コストゼロで上回った。詳細は下記「[ベンチマーク結果](#ベンチマーク結果)」
 
 ## クイックスタート
 
@@ -35,6 +36,28 @@ cd C:\Users\yusei\Desktop\FableT
 ssh g24 "setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /dev/null &"
 ```
 
+## 作業ディレクトリの変更
+
+`fablet.ps1` は自分の置き場所(`Desktop\FableT`)から思考規律ファイルを読むため、**どのディレクトリから呼んでも動く**。Claude Code は「呼び出した時点のカレントディレクトリ」を作業対象として開くので、別プロジェクトで使うにはそのプロジェクトへ `cd` してからフルパスで起動するだけでよい:
+
+```powershell
+cd C:\path\to\your\project
+& C:\Users\yusei\Desktop\FableT\fablet.ps1
+```
+
+毎回フルパスを打つのが面倒なら、PowerShell プロファイルに関数を1つ足す(以後どこでも `fablet` の4文字で起動できる):
+
+```powershell
+# notepad $PROFILE で開いて追記(ファイルが無ければ New-Item $PROFILE -Force で作る)
+function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
+```
+
+補足:
+
+- **ゼロクレジット接続と FABLE 思考規律はどこで起動しても有効**(環境変数と `--append-system-prompt` はランチャが注入するため、場所に依存しない)
+- **`/office` と7エージェントは FableT のプロジェクト設定**(`.claude\agents\` と `.claude\commands\office.md`)。他プロジェクトでも使いたい場合は、この2つをそのプロジェクトの `.claude\` へコピーする。全プロジェクト共通にしたければ `C:\Users\yusei\.claude\agents\` / `...\commands\` に置く
+- セッションを開いたまま別ディレクトリも触りたいときは、セッション内で `/add-dir <パス>` を使う
+
 ## モデル構成 — 二段構え
 
 | tier | モデル | 実体 | 使いどころ |
@@ -51,6 +74,37 @@ ssh g24 "setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /
 ```
 
 両モデル合計 ~87GB は 96GB VRAM に同時常駐でき、切替でロード待ちは発生しない。tier の割り当ては `~/.fcc/.env` の3行(`MODEL_OPUS` 等)で一元管理される。
+
+## ベンチマーク結果
+
+2026-07-11、独立ベンチ基盤で MMLU / GSM8K / JMMLU / MGSM / JCommonsenseQA の **350問/モデル** を機械採点(temperature=0)で比較した。詳細な方法・タスク別内訳・考察は [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) を参照。
+
+| モデル | 正答率 | 平均レイテンシ | コスト |
+|---|---:|---:|---:|
+| qwen3:30b-a3b(生) | 90.6% | 9.24s | $0 |
+| **fablet-code**(120B+思考規律) | **89.7%** | **2.13s** | **$0** |
+| **fablet-mid**(30B+思考規律) | **88.9%** | 6.53s | **$0** |
+| gpt-5.4(OpenAI フラッグシップ) | 88.3% | 0.97s | $0.229 |
+| Claude Sonnet | 86.0% | 5.70s | サブスク枠 |
+| gpt-5.4-mini | 80.3% | 0.84s | $0.079 |
+
+要点:
+
+- **FableT の2モデルは、有償クラウドのフラッグシップと統計的に同水準**(上位グループの差は±3ptの誤差範囲)。追加コストゼロでこの品質が出ることがベンチで裏付けられた
+- **fablet-code(opus tier)は精度・速度の両方で FableT 内の最上位**。平均2.13秒/問はクラウド並みに速い
+- GSM8K(英数学)では fablet 両モデルが **98%** で gpt-5.4(82%)を圧倒。逆に **JMMLU(日本語の専門知識)は全モデル共通の弱点**(80%前後)
+- 本ベンチは単発QA形式であり、エージェンティックコーディング性能そのものではない点に注意(ツール呼び出しは別途動作検証済み)
+
+## 理想的な使い方
+
+ベンチ結果と実測を踏まえた推奨ワークフロー:
+
+1. **起動は常に `.\fablet.ps1`**(素の `claude` はクレジットを消費する)。3つの `[OK]` を確認
+2. **日常のコーディングは既定(fablet-mid)のまま**。ツール呼び出し中心の連続作業では応答が軽く、往復のテンポがよい
+3. **難所では出し惜しみせず `/model opus`(fablet-code)**。ベンチでは精度・レイテンシとも FableT 最上位で、しかも無料。設計判断・複雑なバグ・アルゴリズムはむしろ opus を既定と考えてよい。両モデルは VRAM に同時常駐しており、**切替のロード待ちはゼロ**
+4. **数学・ロジック系は安心して任せる**(GSM8K 98%)。一方 **日本語の専門知識は鵜呑みにしない**(JMMLU 80%が全モデルの上限)。ドメイン知識が要る作業は一次資料をファイルや URL でセッションに読み込ませ、モデルの記憶に頼らせないこと
+5. **方針が割れる大改修だけ `/office`**。会議はローカルモデルを7回以上起こすため重い。軽微な修正に使わない
+6. **終わったら g24 の後始末**: `./cleanup.sh`(VRAM 解放)。これは礼儀ではなく機能要件
 
 ## オフィス会議モード
 
@@ -113,6 +167,7 @@ ssh g24 "setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /
 | [DESIGN.md](DESIGN.md) | 基本設計。方針転換の経緯、アーキテクチャ、tier ルーティング |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | 実装手順書。g24 構築、検証、トラブルシューティング |
 | [OFFICE.md](OFFICE.md) | オフィス設計と監査記録(P1〜P5 の問題と対処) |
+| [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) | 性能検証結果(350問ベンチ・8モデル比較・考察) |
 | [CLAUDE.md](CLAUDE.md) | セッションのプロジェクト規約 |
 | [FABLE.md](FABLE.md) | 人格・思考規律の原典。抽出物が `fable-*.txt` |
 
