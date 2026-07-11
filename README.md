@@ -16,7 +16,7 @@ FableT は「Windows PC(Claude Code を動かす手元機)+ SSH でつながる 
 - Windows 11 + PowerShell、[Claude Code CLI](https://docs.claude.com/claude-code) インストール済み
 - GPU を持つ Linux 機への **SSH 鍵認証アクセス**(パスワード認証不可。`~/.ssh/config` に `Host g24` エイリアスを用意)
 - そのLinux機に **Ollama 0.20 以上をユーザー空間で導入**できること(sudo不要な手順が [IMPLEMENTATION.md](IMPLEMENTATION.md) Phase 2 にある)
-- 目安 VRAM: `fablet-code`(120B相当)単体なら **70GiB 前後**、`fablet-mid`(30B相当)と同時常駐させるなら **90GiB 前後**。作者の実機は RTX PRO 6000(96GB)だが、これより小さいGPUでも **`fablet-mid` 系(30B以下)のみを opus/sonnet/haiku 全tierに割り当てる**構成にすれば動く(下記「モデル構成」参照)
+- 目安 VRAM: `fable-t`(120B相当)単体なら **70GiB 前後**、`fable-t-mid`(30B相当)と同時常駐させるなら **90GiB 前後**。作者の実機は RTX PRO 6000(96GB)だが、これより小さいGPUでも **`fable-t-mid` 系(30B以下)のみを opus/sonnet/haiku 全tierに割り当てる**構成にすれば動く(下記「モデル構成」参照)
 
 **初回セットアップの全手順**(SSHトンネル、Ollamaのユーザー空間導入、モデル作成、プロキシ設定)は [IMPLEMENTATION.md](IMPLEMENTATION.md) の Phase 0〜5 にまとまっている。以下のクイックスタートは、そのセットアップが完了した後の**日常の起動手順**である。
 
@@ -27,71 +27,85 @@ FableT は「Windows PC(Claude Code を動かす手元機)+ SSH でつながる 
 - **🛠 Claude Code のフル機能** — Read/Edit/Bash/Glob などのツール群、検証ループ、サブエージェント、コンパクションはすべて本物のハーネス。モデルだけがローカル
 - **🏢 オフィス型マルチエージェント** — 提案者・新規提案・クライアント・ファクトチェック・効率厨・保守運用・作業者の7役が議論し、受入条件を固定してから実装・検収する
 - **⚡ 実測性能** — プレフィル約5,000 tok/s、生成150 tok/s(2026-07-11 実測)。日常応答は数秒
-- **📊 ベンチ実証済み** — 350問ベンチ(2026-07-11)で fablet-code は **89.7%**。OpenAI フラッグシップ gpt-5.4(88.3%)と Claude Sonnet(86.0%)を追加コストゼロで上回った。詳細は下記「[ベンチマーク結果](#ベンチマーク結果)」
+- **📊 ベンチ実証済み** — 350問ベンチ(2026-07-11)で fable-t は **89.7%**。OpenAI フラッグシップ gpt-5.4(88.3%)と Claude Sonnet(86.0%)を追加コストゼロで上回った。詳細は下記「[ベンチマーク結果](#ベンチマーク結果)」
 
 ## クイックスタート
 
-必要な手順は **1コマンド** :
+初回だけリポジトリを取得する:
 
 ```powershell
-cd C:\Users\yusei\Desktop\FableT
-.\fablet.ps1
+git clone https://github.com/YUSEITASHIRO/FableT.git
 ```
 
-これだけで、SSHトンネル(g24へ)と fcc-server(プロキシ)を自動起動・自動検査し、FABLE.md の思考規律を注入した Claude Code セッションが立ち上がる。3つの `[OK]` が並べば準備完了。
+以後の起動は、**使いたいプロジェクトのディレクトリに `cd` してから、クローンした FableT の `fablet.ps1` をフルパスで呼ぶ**のが基本の使い方である(FableT は「どこか一箇所に置いて、そこから全プロジェクトを起動する司令塔」として使う設計):
+
+```powershell
+cd C:\path\to\your-project
+& C:\path\to\FableT\fablet.ps1
+```
+
+毎回フルパスを打つのが面倒なら、PowerShell プロファイルに関数を1つ足しておく(以後どのプロジェクトでも `fablet` の4文字で起動できる):
+
+```powershell
+# notepad $PROFILE で開いて追記(ファイルが無ければ New-Item $PROFILE -Force で作る)
+function fablet { & "C:\path\to\FableT\fablet.ps1" @args }
+```
+
+```powershell
+cd C:\path\to\your-project
+fablet
+```
+
+起動すると SSHトンネル(GPU機へ)と fcc-server(プロキシ)を自動起動・自動検査し、FABLE.md の思考規律を注入した Claude Code セッションが立ち上がる。3つの `[OK]` が並べば準備完了。**セッションが開いたら、まず `/office <依頼>` から使い始めるのが基本の使い方**(詳細は下記「オフィス会議モード」)。
 
 ```
 [OK] Ollama (g24 :11500 via tunnel)
-[OK] fablet-code visible
+[OK] fable-t visible
 [OK] fcc-server (:8082)
 ```
 
-唯一の手動復旧ポイントは g24 側の Ollama が落ちている場合(起動時に赤字で指摘される):
+唯一の手動復旧ポイントは GPU機側の Ollama が落ちている場合(起動時に赤字で指摘される):
 
 ```powershell
 ssh g24 "setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /dev/null &"
 ```
 
-## 作業ディレクトリの変更
-
-`fablet.ps1` は自分の置き場所(`Desktop\FableT`)から思考規律ファイルを読むため、**どのディレクトリから呼んでも動く**。Claude Code は「呼び出した時点のカレントディレクトリ」を作業対象として開くので、別プロジェクトで使うにはそのプロジェクトへ `cd` してからフルパスで起動するだけでよい:
-
-```powershell
-cd C:\path\to\your\project
-& C:\Users\yusei\Desktop\FableT\fablet.ps1
-```
-
-毎回フルパスを打つのが面倒なら、PowerShell プロファイルに関数を1つ足す(以後どこでも `fablet` の4文字で起動できる):
-
-```powershell
-# notepad $PROFILE で開いて追記(ファイルが無ければ New-Item $PROFILE -Force で作る)
-function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
-```
-
 補足:
 
-- **ゼロクレジット接続と FABLE 思考規律はどこで起動しても有効**(環境変数と `--append-system-prompt` はランチャが注入するため、場所に依存しない)
-- **`/office` と7エージェントは FableT のプロジェクト設定**(`.claude\agents\` と `.claude\commands\office.md`)。他プロジェクトでも使いたい場合は、この2つをそのプロジェクトの `.claude\` へコピーする。全プロジェクト共通にしたければ `C:\Users\yusei\.claude\agents\` / `...\commands\` に置く
+- **ゼロクレジット接続と FABLE 思考規律はどこで起動しても有効**(環境変数と `--append-system-prompt` はランチャが注入するため、カレントディレクトリに依存しない)
+- **`/office` と7エージェントは FableT のプロジェクト設定**(`.claude\agents\` と `.claude\commands\office.md`)。作業先プロジェクトでも使うには、この2つをそのプロジェクトの `.claude\` へコピーする。全プロジェクト共通にしたければユーザーホームの `.claude\agents\` / `.claude\commands\` に置く
 - セッションを開いたまま別ディレクトリも触りたいときは、セッション内で `/add-dir <パス>` を使う
 
-## モデル構成 — 二段構え
+## モデル構成 — 4つの名前
 
-| tier | モデル | 実体 | 使いどころ |
-|---|---|---|---|
-| sonnet / haiku(既定) | `fablet-mid` | qwen3:30b-a3b(MoE) | 日常のコーディング。速い(1往復2〜5秒) |
-| opus | `fablet-code` | gpt-oss:120b | 難しい設計判断・複雑な実装。賢いが待つ |
+Claude Code の `/model` ピッカーは仕様上 `Opus` / `Sonnet` / `Haiku` という組込みラベルを常に表示し、これを非表示にする設定は存在しない(調査確認済み)。そこで FableT は、**中身が何であるかを紛らわしくしないために、tier とは別に固有の名前を4つ用意する**:
+
+| モデル名 | 実体 | 呼ばれる場面 |
+|---|---|---|
+| `fable-t` | gpt-oss:120b | 主セッションの opus tier。難しい設計判断・複雑な実装 |
+| `fable-t-mid` | qwen3:30b-a3b(MoE) | 主セッションの sonnet / haiku tier(既定)。日常のコーディング。速い |
+| `fable-t-o` | `fable-t` と同じ重み | `/office` 会議の提案者・新規提案・作業者(書込み権限を持つ役) |
+| `fable-t-mid-o` | `fable-t-mid` と同じ重み | `/office` 会議のクライアント・ファクトチェック・効率厨・保守運用(審査役) |
+
+`-o` は tier 経由ではなく、`.claude/agents/*.md` の `model:` にゲートウェイ名(`ollama/fable-t-o` 等)を直書きして呼ばれる。`ollama cp` で重みを共有した別名タグなので、追加のディスク・VRAM消費はない。**あなたが `/model` で直接選ぶのは `fable-t` / `fable-t-mid` の2つ**で、`-o` の2つは `/office` 実行中に裏で自動的に使われる。
 
 セッション内での切替:
 
 ```
 /model opus                 # 難所の前に120Bへ
 /model sonnet               # 終わったら戻す
-/model ollama/fablet-code   # ゲートウェイのモデル名を直接指定してもよい
+/model ollama/fable-t       # ゲートウェイのモデル名を直接指定してもよい(Opus/Sonnet表記より紛らわしくない)
 ```
 
-両モデル合計 ~87GB は 96GB VRAM に同時常駐でき、切替でロード待ちは発生しない(作者の実機基準)。tier の割り当ては `~/.fcc/.env`(GPU機側に自分で作成する設定ファイル。リポジトリには含まれない)の3行(`MODEL_OPUS` 等)で一元管理される。
+両モデル合計 ~87GB は 96GB VRAM に同時常駐でき、切替でロード待ちは発生しない(作者の実機基準)。tier の割り当ては `~/.fcc/.env`(GPU機側に自分で作成する設定ファイル。リポジトリには含まれない)で一元管理される:
 
-**VRAMが90GBに満たない場合**は、`MODEL_OPUS` も `fablet-mid`(30B)相当に振れば、120Bモデルを常駐させずに済む。速度は落ちるが、追加コストゼロの原則は変わらない。
+```
+MODEL_OPUS=ollama/fable-t
+MODEL_SONNET=ollama/fable-t-mid
+MODEL_HAIKU=ollama/fable-t-mid
+```
+
+**VRAMが90GBに満たない場合**は、`MODEL_OPUS` も `fable-t-mid` に振れば、120Bモデルを常駐させずに済む。速度は落ちるが、追加コストゼロの原則は変わらない。
 
 ## ベンチマーク結果
 
@@ -100,8 +114,8 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 | モデル | 正答率 | 平均レイテンシ | コスト |
 |---|---:|---:|---:|
 | qwen3:30b-a3b(生) | 90.6% | 9.24s | $0 |
-| **fablet-code**(120B+思考規律) | **89.7%** | **2.13s** | **$0** |
-| **fablet-mid**(30B+思考規律) | **88.9%** | 6.53s | **$0** |
+| **fable-t**(120B+思考規律) | **89.7%** | **2.13s** | **$0** |
+| **fable-t-mid**(30B+思考規律) | **88.9%** | 6.53s | **$0** |
 | gpt-5.4(OpenAI フラッグシップ) | 88.3% | 0.97s | $0.229 |
 | Claude Sonnet | 86.0% | 5.70s | サブスク枠 |
 | gpt-5.4-mini | 80.3% | 0.84s | $0.079 |
@@ -109,24 +123,18 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 要点:
 
 - **FableT の2モデルは、有償クラウドのフラッグシップと統計的に同水準**(上位グループの差は±3ptの誤差範囲)。追加コストゼロでこの品質が出ることがベンチで裏付けられた
-- **fablet-code(opus tier)は精度・速度の両方で FableT 内の最上位**。平均2.13秒/問はクラウド並みに速い
-- GSM8K(英数学)では fablet 両モデルが **98%** で gpt-5.4(82%)を圧倒。逆に **JMMLU(日本語の専門知識)は全モデル共通の弱点**(80%前後)
+- **fable-t(opus tier)は精度・速度の両方で FableT 内の最上位**。平均2.13秒/問はクラウド並みに速い
+- GSM8K(英数学)では FableT の両モデルが **98%** で gpt-5.4(82%)を圧倒。逆に **JMMLU(日本語の専門知識)は全モデル共通の弱点**(80%前後)
 - 本ベンチは単発QA形式であり、エージェンティックコーディング性能そのものではない点に注意(ツール呼び出しは別途動作検証済み)
 
-## 理想的な使い方
+## オフィス会議モード(基本の使い方)
 
-ベンチ結果と実測を踏まえた推奨ワークフロー:
+FableT の基本ワークフローは、**作業したいプロジェクトへ `cd` → `fablet` 起動 → `/office <依頼>`** である。方針が割れうる依頼はもちろん、日常の実装依頼もまず `/office` に投げるのが既定だと考えてよい:
 
-1. **起動は常に `.\fablet.ps1`**(素の `claude` はクレジットを消費する)。3つの `[OK]` を確認
-2. **日常のコーディングは既定(fablet-mid)のまま**。ツール呼び出し中心の連続作業では応答が軽く、往復のテンポがよい
-3. **難所では出し惜しみせず `/model opus`(fablet-code)**。ベンチでは精度・レイテンシとも FableT 最上位で、しかも無料。設計判断・複雑なバグ・アルゴリズムはむしろ opus を既定と考えてよい。両モデルは VRAM に同時常駐しており、**切替のロード待ちはゼロ**
-4. **数学・ロジック系は安心して任せる**(GSM8K 98%)。一方 **日本語の専門知識は鵜呑みにしない**(JMMLU 80%が全モデルの上限)。ドメイン知識が要る作業は一次資料をファイルや URL でセッションに読み込ませ、モデルの記憶に頼らせないこと
-5. **方針が割れる大改修だけ `/office`**。会議はローカルモデルを7回以上起こすため重い。軽微な修正に使わない
-6. **終わったら g24 の後始末**: `./cleanup.sh`(VRAM 解放)。これは礼儀ではなく機能要件
-
-## オフィス会議モード
-
-方針が割れそうな重いタスクは `/office` に掛ける:
+```powershell
+cd C:\path\to\your-project
+fablet
+```
 
 ```
 /office ログイン処理をセッショントークン方式に移行して
@@ -134,14 +142,24 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 
 進行(詳細は [.claude/commands/office.md](.claude/commands/office.md)):
 
-1. **クライアント**が受入条件を3〜5個に固定(以後の唯一の合否基準)
-2. **提案者**が方針A、**新規提案**が前提の異なる対案Bを提出
-3. **ファクトチェック**(事実主張の検証)・**効率厨**(工数と過剰設計)・**保守運用**(半年後に壊れないか)が両案を審査
-4. PM(主セッション)が統合判断 → **作業者**が実装と検証ループ → クライアントが検収
+1. **クライアント**(`fable-t-mid-o`)が受入条件を3〜5個に固定(以後の唯一の合否基準)
+2. **提案者**(`fable-t-o`)が方針A、**新規提案**(`fable-t-o`)が前提の異なる対案Bを提出
+3. **ファクトチェック**・**効率厨**・**保守運用**(いずれも `fable-t-mid-o`)が両案を審査
+4. PM(主セッション)が統合判断 → **作業者**(`fable-t-o`)が実装と検証ループ → クライアントが検収
 
-書込み権限を持つのは作業者だけ。レビュー役は読取専用なので、構造的に暴走できない。自明なタスク(typo修正など)は会議を自動省略して直行する。
+書込み権限を持つのは作業者だけ。レビュー役は読取専用なので、構造的に暴走できない。**自明なタスク(typo修正・1行変更など)は会議を自動省略し、PM(主セッション)が直接実装する**ので、些末な依頼まで会議を挟んで待たされることはない。
 
-⏱ **注意: 会議は重い。** 1回でローカルモデルを7回以上起こすため、軽微な修正に使うと数十分かかる。日常タスクは普通に依頼するだけでよい。
+⏱ **注意: フル会議は重い。** 1回でローカルモデルを7回以上起こすため、軽微とは言えない修正でも数十分かかることがある。急ぎで結論が要る/自明と分かっている作業は、`/office` を使わず直接依頼してよい。
+
+## 理想的な使い方
+
+ベンチ結果と実測を踏まえた推奨ワークフロー:
+
+1. **作業対象のプロジェクトディレクトリへ `cd` してから `fablet` を起動する**(FableTのフォルダの中で作業しない)。3つの `[OK]` を確認したら `/office <依頼>` から始める
+2. **会議のPM判断後、作業者(`fable-t-o`)は実質 opus 相当の重さで動く**。ベンチでは精度・レイテンシともFableT最上位。設計判断・複雑なバグ・アルゴリズムはここに任せてよい
+3. **数学・ロジック系は安心して任せる**(GSM8K 98%)。一方 **日本語の専門知識は鵜呑みにしない**(JMMLU 80%が全モデルの上限)。ドメイン知識が要る作業は一次資料をファイルや URL でセッションに読み込ませ、モデルの記憶に頼らせないこと
+4. **本当に自明な作業(typo・1行変更等)は会議が自動省略される**ので、律儀に毎回 `/office` を使わなくても構造は壊れない。迷ったら `/office` に投げるのが安全側
+5. **終わったら GPU機の後始末**: `./cleanup.sh`(VRAM 解放)。これは礼儀ではなく機能要件
 
 ## クレジットについて(重要)
 
@@ -150,7 +168,7 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 | `.\fablet.ps1` | ローカルプロキシ → g24 | **なし(ゼロ)** |
 | 素の `claude` | 本物の Anthropic API | **あり** |
 
-- 見分け方: セッション内で `/model` を開き、`ollama/fablet-code` 等が並んでいればローカル(消費なし)。Opus/Sonnet/Haiku の正規モデルだけなら Anthropic(消費あり)
+- 見分け方: セッション内で `/model` を開き、`ollama/fable-t` 等が並んでいればローカル(消費なし)。Opus/Sonnet/Haiku の正規モデルだけなら Anthropic(消費あり)
 - `~/.fcc/.env` の tier をクラウド無料枠(NVIDIA NIM 等)へ向けた場合はクレジットこそ減らないが、**コードが外部送信される**。業務コードでは必ずローカル(`ollama/`)に戻すこと([DESIGN.md 4.1](DESIGN.md))
 
 ## 注意事項
@@ -200,7 +218,7 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
        │ ANTHROPIC_BASE_URL=http://127.0.0.1:8082 (ダミートークン)
        ▼
   fcc-server (Anthropic API 互換プロキシ・自動起動)
-       │ tier 解決: opus → fablet-code(120B) / sonnet,haiku → fablet-mid(30B)
+       │ tier 解決: opus → fable-t(120B) / sonnet,haiku → fable-t-mid(30B)
        ▼
   127.0.0.1:11500 ──[SSHトンネル・自動起動]──▶ ユーザー空間 Ollama (:11500)
 ```
@@ -209,4 +227,4 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 
 - Windows 11 + Claude Code CLI + uv + 鍵認証済みの `ssh g24`
 - g24: ユーザー空間 Ollama **0.20 以上**(`~/ollama-dist`、`:11500`、flash attention + KV q8_0)
-- モデル: `fablet-code`(gpt-oss:120b, 131k ctx)/ `fablet-mid`(qwen3:30b-a3b, 64k ctx)/ `fablet-fast`(gpt-oss:20b, 64k ctx・予備)/ `fablet-chat`(人格入り・相談用)
+- モデル: `fable-t`(gpt-oss:120b, 131k ctx)/ `fable-t-mid`(qwen3:30b-a3b, 64k ctx)/ `fable-t-o`・`fable-t-mid-o`(同重み・`/office`専用エイリアス)/ `fablet-fast`(gpt-oss:20b, 64k ctx・予備)/ `fablet-chat`(人格入り・相談用)

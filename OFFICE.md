@@ -46,7 +46,7 @@ DESIGN.md は「Claude Code のハーネスをローカル LLM で駆動する�
 
 DESIGN.md 0章の表は新方針で「人格が効く」と結論するが、そこで効いているのは
 **Claude Code ハーネスの一般規範であって FABLE.md の人格ではない**。
-`fablet-code` は SYSTEM 空、Claude Code の system prompt は Anthropic 製の汎用文。
+`fable-t` は SYSTEM 空、Claude Code の system prompt は Anthropic 製の汎用文。
 つまり「人格移植プロジェクトの主用途に人格が効かない」という旧方針の自己否定が、
 形を変えてそのまま残っている。→ 本書2章で解消する。
 
@@ -134,17 +134,17 @@ L1 はハーネスの system prompt を**置換せず追記**するので、ツ�
 
 ## 4. `/model` 連携 — 「/model fablet」を実現する仕組み
 
-すでに材料は揃っている。fcc が `/v1/models` で `ollama/fablet-code` 等を公開し、
+すでに材料は揃っている。fcc が `/v1/models` で `ollama/fable-t` 等を公開し、
 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`(IMPLEMENTATION.md Phase 5-2)で
 Claude Code の `/model` がゲートウェイのモデル一覧を認識する。つまり:
 
-- `/model ollama/fablet-code` — セッションの主モデルをローカル 120B に切替
+- `/model ollama/fable-t` — セッションの主モデルをローカル 120B に切替
 - `/model opus` / `/model haiku` — fcc の tier 割り当て(`~/.fcc/.env`)に従う
 - エージェント定義の `model:` フィールド(opus/sonnet/haiku)も同じ tier 表で解決
   されるため、**オフィスの各役がどのローカルモデルで動くかは `~/.fcc/.env` の
   3行で一元管理できる**
 
-将来 GLM-4.5-Air 等を `fablet-code2` として作れば `/model ollama/fablet-code2` で
+将来 GLM-4.5-Air 等を `fable-t2` として作れば `/model ollama/fable-t2` で
 即切替できる。Modelfile の追加以外に必要な作業はない。
 
 ## 5. 起動手順(まとめ)

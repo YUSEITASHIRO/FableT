@@ -59,7 +59,7 @@ Capabilities     completion, tools, thinking
        ▼
   fcc-server (FastAPI proxy)
        │ /v1/messages を OpenAI互換 に変換
-       │ MODEL=ollama/fablet-code
+       │ MODEL=ollama/fable-t
        ▼
   localhost:11434 ──[ssh -N -L 11434:localhost:11434 g24]──▶ Ollama
                                                               └ gpt-oss:120b
@@ -75,11 +75,11 @@ Capabilities     completion, tools, thinking
 
 | モデル | ベース | SYSTEM | num_ctx | 用途 |
 |---|---|---|---|---|
-| **`fablet-code`**(新規・主役) | gpt-oss:120b | **なし**(Claude Codeが供給) | 131072 | Claude Code 経由のコーディング |
+| **`fable-t`**(新規・主役) | gpt-oss:120b | **なし**(Claude Codeが供給) | 131072 | Claude Code 経由のコーディング |
 | `fablet-chat`(旧 `fablet` を改名) | gpt-oss:120b | FABLE.md抽出人格 | 65536 | Open WebUI等での相談・文章 |
 | `fablet-fast`(任意) | gpt-oss:20b | なし | 65536 | Haiku tier(要約・分類等の雑務)。32768 では内部処理が黙って切り捨てられうる(OFFICE.md P4) |
 
-`fablet-code` の Modelfile は SYSTEM を持たず、`num_ctx` と生成パラメータだけを設定する薄い派生である。**Modelfile が SYSTEM を持つと Ollama はそれを会話先頭に挿入し、Claude Code が送る本物の system prompt と二重になる**ため、明示的に空でなければならない。
+`fable-t` の Modelfile は SYSTEM を持たず、`num_ctx` と生成パラメータだけを設定する薄い派生である。**Modelfile が SYSTEM を持つと Ollama はそれを会話先頭に挿入し、Claude Code が送る本物の system prompt と二重になる**ため、明示的に空でなければならない。
 
 FABLE.md 由来の資産(`fable-system.txt` 等)は捨てない。`fablet-chat` として生かす。ただし**プロジェクトの主軸からは降ろす**。コーディングにおける「Fable 5らしさ」は、今後は Claude Code のsystem promptとハーネスが供給する。
 
@@ -89,8 +89,8 @@ fcc-server は Claude Code が要求する Opus/Sonnet/Haiku の3 tier を、そ
 
 | tier | 割り当て | 理由 |
 |---|---|---|
-| `MODEL_OPUS` | `ollama/fablet-code`(g24) | 主計画・実装・最終判断。ローカルで完結。プライバシーとレート制限なし |
-| `MODEL_SONNET` | `ollama/fablet-code` | 同上(当面は同一) |
+| `MODEL_OPUS` | `ollama/fable-t`(g24) | 主計画・実装・最終判断。ローカルで完結。プライバシーとレート制限なし |
+| `MODEL_SONNET` | `ollama/fable-t` | 同上(当面は同一) |
 | `MODEL_HAIKU` | `ollama/fablet-fast`(gpt-oss:20b) | Claude Codeが内部的に多用する軽量処理。120Bを毎回起こすと遅い |
 
 ### 4.1 ローカルとクラウド無料枠の使い分け
@@ -107,7 +107,7 @@ fcc-server は Claude Code が要求する Opus/Sonnet/Haiku の3 tier を、そ
 
 | 対象 | バックエンド | 理由 |
 |---|---|---|
-| 業務コード・機密を含むリポジトリ | `ollama/fablet-code`(ローカル) | 外部送信なし、レート制限なし |
+| 業務コード・機密を含むリポジトリ | `ollama/fable-t`(ローカル) | 外部送信なし、レート制限なし |
 | 公開リポジトリ・個人プロジェクトの本気の作業 | クラウド無料枠(Kimi K2.6 / GLM 系) | ツール忠実度と推論力が明確に上 |
 | g24 が他ユーザーに占有されている時 | クラウド無料枠 | 可用性のフォールバック |
 
@@ -154,13 +154,13 @@ Claude Code は system prompt + ツール定義だけで 10〜15k トークン�
 
 - **Modelfile SYSTEM への人格焼き込みを主軸とすること** — コーディング用途で上書きされる。`fablet-chat` として周辺に降格
 - **aider / Cline を主クライアントとすること** — Claude Code 本体がハーネスとして上位互換
-- **「NO external tools」宣言** — ハーネスを載せると逆効果。`fablet-code` からは除去
+- **「NO external tools」宣言** — ハーネスを載せると逆効果。`fable-t` からは除去
 - **自己認識をどう名乗らせるかの A案/B案** — Claude Code 経由では Claude Code の system prompt が自己認識を規定するため、争点でなくなった
 - **マルチモデル協調(旧10章)を自作オーケストレータで組むこと** — tier routing とサブエージェント機構がハーネス側に既にある。クロスレビューが要るなら Claude Code の Agent ツールで足りる
 
 ## 9. 将来拡張
 
-- `fablet-code` のベースを GLM-4.5-Air 等へ差し替え(ディスク197GB空きにより pull 可能になった)。Modelfile の `FROM` 差し替えのみ
+- `fable-t` のベースを GLM-4.5-Air 等へ差し替え(ディスク197GB空きにより pull 可能になった)。Modelfile の `FROM` 差し替えのみ
 - `fcc-codex` による Codex CLI の併用(同一プロキシで両対応)
 - Discord/Telegram ボット経由でのリモートセッション(free-claude-code の同梱機能)
 - 相談用 UI として Open WebUI + `fablet-chat`

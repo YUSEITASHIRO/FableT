@@ -9,9 +9,10 @@
 
 | ファイル / 成果物 | 場所 | 役割 |
 |---|---|---|
-| `Modelfile.code` | ローカル → g24 | `fablet-code` の定義(SYSTEMなし・131k ctx) |
+| `Modelfile.fable-t` | ローカル → g24 | `fable-t` の定義(SYSTEMなし・131k ctx) |
+| `Modelfile.fable-t-mid` | ローカル → g24 | `fable-t-mid` の定義(SYSTEMなし・65k ctx) |
 | `Modelfile.fast` | ローカル → g24 | `fablet-fast` の定義(Haiku tier用) |
-| `fablet-code` / `fablet-fast` | g24 | Ollamaモデル |
+| `fable-t` / `fable-t-mid` / `fable-t-o` / `fable-t-mid-o` / `fablet-fast` | g24 | Ollamaモデル(`-o` は `ollama cp` による別名タグ) |
 | `fcc-server` | Windows | Anthropic API 互換プロキシ |
 | `~/.fcc/.env` | Windows | ルーティングと接続設定 |
 | `fablet-chat`(旧 `fablet`) | g24 | チャット用途に残す人格モデル |
@@ -30,7 +31,7 @@
 ```
 $ ollama ps
 NAME                  SIZE     PROCESSOR    CONTEXT
-fablet-code:latest    70 GB    100% CPU     131072      ← GPU に載っていない
+fable-t:latest    70 GB    100% CPU     131072      ← GPU に載っていない
 ```
 
 VRAM は 90GB 空いており、`num_ctx` の問題ではない(既定 8192 の `gpt-oss:120b` でも `100% CPU`)。原因は特定済みで、**Ollama の GPU ランナーライブラリが消えている**。
@@ -104,9 +105,9 @@ ssh g24 "curl -s http://127.0.0.1:11500/api/version"                            
 ssh g24 "grep 'inference compute' ~/ollama-dist/server.log | tail -1"
 # → library=CUDA compute=12.0 ... total="95.6 GiB" available="95.0 GiB"   ✅ GPU 認識
 
-ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama run fablet-code 'Reply with exactly: ready'; \
+ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama run fable-t 'Reply with exactly: ready'; \
          OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama ps"
-# → fablet-code  70 GB  100% GPU  131072      ✅ 131k ctx が全載せ(VRAM 67GB 使用 / 30GB 空き)
+# → fable-t  70 GB  100% GPU  131072      ✅ 131k ctx が全載せ(VRAM 67GB 使用 / 30GB 空き)
 # → ロード 約18秒
 
 ssh g24 "curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:11500/v1/messages -d '{}'"
@@ -144,7 +145,7 @@ ssh g24 "ollama cp fablet fablet-chat && ollama rm fablet && ollama list | grep 
 
 > `fablet` という名前を空けておく。Claude Code 用のモデルと人格モデルが同名だと事故る。
 
-## Phase 2: `fablet-code` の作成(10分)
+## Phase 2: `fable-t` の作成(10分)
 
 **SYSTEM を持たないこと**が要件である。Claude Code が自前の system prompt を送るため、Modelfile 側の SYSTEM は二重定義になり、特に旧 `fablet` の「You have NO external tools」はツール呼び出しを阻害する(DESIGN.md 3章)。
 
@@ -153,13 +154,22 @@ ssh g24 "ollama cp fablet fablet-chat && ollama rm fablet && ollama list | grep 
 ```bash
 cd /c/Users/yusei/Desktop/FableT
 
-cat > Modelfile.code << 'EOF'
+cat > Modelfile.fable-t << 'EOF'
 FROM gpt-oss:120b
 
 # SYSTEM は意図的に定義しない。Claude Code が system prompt を供給する。
 
 PARAMETER num_ctx 131072
 PARAMETER temperature 1.0
+EOF
+
+cat > Modelfile.fable-t-mid << 'EOF'
+FROM qwen3:30b-a3b
+
+# SYSTEM は意図的に定義しない。Claude Code が system prompt を供給する。
+
+PARAMETER num_ctx 65536
+PARAMETER temperature 0.7
 EOF
 
 cat > Modelfile.fast << 'EOF'
@@ -173,15 +183,18 @@ EOF
 
 ### 2-2. 転送してビルド
 
-ユーザー空間 Ollama(`:11500`)に対して作成する。
+ユーザー空間 Ollama(`:11500`)に対して作成する。**命名規則**: 主セッション(opus/sonnet/haiku tier)は `fable-t` / `fable-t-mid`、`/office` 会議のサブエージェント専用に同じ重みを `-o` サフィックスで複製する(`ollama cp` はレイヤーを共有するため追加ディスク消費ゼロ)。
 
 ```bash
 ssh g24 "mkdir -p ~/fablet"
-scp Modelfile.code Modelfile.fast g24:~/fablet/
+scp Modelfile.fable-t Modelfile.fable-t-mid Modelfile.fast g24:~/fablet/
 ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; cd ~/fablet \
-  && ~/ollama-dist/bin/ollama create fablet-code -f Modelfile.code \
+  && ~/ollama-dist/bin/ollama create fable-t -f Modelfile.fable-t \
+  && ~/ollama-dist/bin/ollama create fable-t-mid -f Modelfile.fable-t-mid \
   && ~/ollama-dist/bin/ollama create fablet-fast -f Modelfile.fast \
-  && ~/ollama-dist/bin/ollama list | grep fablet"
+  && ~/ollama-dist/bin/ollama cp fable-t fable-t-o \
+  && ~/ollama-dist/bin/ollama cp fable-t-mid fable-t-mid-o \
+  && ~/ollama-dist/bin/ollama list | grep fable"
 ```
 
 ### 2-3. SYSTEM が空であることの確認
@@ -189,7 +202,7 @@ ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; cd ~/fablet \
 新方針の要である。ここが空でないと Claude Code の system prompt と二重になる。
 
 ```bash
-ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fablet-code --system"   # → 何も出ない
+ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fable-t --system"   # → 何も出ない
 ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fablet-chat --system | head -3"  # → 人格プロンプト
 ```
 
@@ -198,7 +211,7 @@ ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fablet-chat -
 131k context の KV キャッシュが VRAM に収まるかを確認する。CPU オフロードが出ると 1 応答に数分かかり実用にならない。
 
 ```bash
-ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; ~/ollama-dist/bin/ollama run fablet-code 'Say only: ready'; ~/ollama-dist/bin/ollama ps"
+ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; ~/ollama-dist/bin/ollama run fable-t 'Say only: ready'; ~/ollama-dist/bin/ollama ps"
 ```
 
 チェックポイント: PROCESSOR 列が **`100% GPU`**。`XX%/XX% CPU/GPU` と出たら `num_ctx` を 131072 → 65536 に下げて 2-1 からやり直す。
@@ -218,7 +231,7 @@ ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:11500:localhost:11500 g24
 疎通確認(**`127.0.0.1` で確認すること**。`localhost` だと IPv6 に逃げて別物を見ている可能性がある):
 
 ```bash
-curl -s http://127.0.0.1:11500/api/tags | grep fablet-code
+curl -s http://127.0.0.1:11500/api/tags | grep fable-t
 ```
 
 ## Phase 4: free-claude-code プロキシ(15分)
@@ -249,12 +262,14 @@ ANTHROPIC_AUTH_TOKEN="fablet-local"
 # 末尾に /v1 を付けてはならない(fcc が起動時に拒否する)。
 OLLAMA_BASE_URL="http://127.0.0.1:11500"
 
-MODEL=ollama/fablet-code
-MODEL_OPUS=ollama/fablet-code
-MODEL_SONNET=ollama/fablet-code
-MODEL_HAIKU=ollama/fablet-fast
+MODEL=ollama/fable-t-mid
+MODEL_OPUS=ollama/fable-t
+MODEL_SONNET=ollama/fable-t-mid
+MODEL_HAIKU=ollama/fable-t-mid
 EOF
 ```
+
+> `/office` 会議のサブエージェント(`.claude/agents/*.md`)は tier を介さず、`model:` に `ollama/fable-t-o` / `ollama/fable-t-mid-o` を直接指定して呼ばれる。主セッションの tier 割り当てとは独立している。
 
 クラウド無料枠へ切り替える場合は `NVIDIA_NIM_API_KEY` 等を足し、`MODEL_OPUS` だけを差し替える。**業務コードでは既定でローカル(`ollama/`)のみを使い、戻し忘れに注意する**([DESIGN.md 4.1](DESIGN.md))。
 
@@ -264,7 +279,7 @@ EOF
 fcc-server
 ```
 
-`/v1/models` が 200 を返し、`ollama/fablet-code` が並べば良い。
+`/v1/models` が 200 を返し、`ollama/fable-t` が並べば良い。
 
 ```bash
 curl -s -H "x-api-key: fablet-local" http://127.0.0.1:8082/v1/models | head -c 200
@@ -353,7 +368,7 @@ Claude Code は Read/Edit/Bash 等を厳格なスキーマで呼ぶ。`gpt-oss:1
 |---|---|
 | `ollama ps` で CPU オフロード | `num_ctx` 過大。131072 → 65536。`CLAUDE_CODE_AUTO_COMPACT_WINDOW` も併せて下げる |
 | HTTP 400 が返る | 文脈長超過が最有力。`num_ctx` を上げるか compact window を下げる |
-| モデルが「ツールを使えません」と言う | Modelfile に SYSTEM が残っている。`ollama show fablet-code --system` が**空**であることを確認 |
+| モデルが「ツールを使えません」と言う | Modelfile に SYSTEM が残っている。`ollama show fable-t --system` が**空**であることを確認 |
 | 突然 `100% CPU` になった | 壊れた system Ollama(`:11434`)に繋がっている。`OLLAMA_HOST=127.0.0.1:11500` とトンネルの右辺を確認 |
 | `ollama serve` が起動しない | `ssh` の `nohup ... &` はセッション終了に巻き込まれる。`setsid` を使う |
 | Edit の `old_string` 不一致を繰り返す | ベースモデルの限界。`MODEL_OPUS` をクラウドの agentic 訓練済みモデルへ切り替える |
@@ -361,9 +376,9 @@ Claude Code は Read/Edit/Bash 等を厳格なスキーマで呼ぶ。`gpt-oss:1
 | 応答が来ない / 接続拒否 | Phase 3 のトンネルが切れている。`curl http://127.0.0.1:11500/api/tags` で確認 |
 | モデル名が解決されない | `ollama/` プレフィクス漏れ、または `OLLAMA_BASE_URL` に `/v1` を付けている |
 | `Upstream provider OLLAMA returned HTTP 404` / `404 page not found` | Ollama が古く `/v1/messages` が無い。**0.20 以上**が必要。`curl :11500/api/version` で確認 |
-| `model 'fablet-code' not found` なのに `ollama list` には在る | トンネルが張れておらず**ローカル Windows の Ollama**を叩いている。Phase 3 の IPv4/IPv6 の注意を参照。`127.0.0.1` と `localhost` で `/api/tags` を比べると一発で分かる |
+| `model 'fable-t' not found` なのに `ollama list` には在る | トンネルが張れておらず**ローカル Windows の Ollama**を叩いている。Phase 3 の IPv4/IPv6 の注意を参照。`127.0.0.1` と `localhost` で `/api/tags` を比べると一発で分かる |
 | `tar --zstd` が `zstd: Cannot exec` | `tar` は外部 `zstd` を呼ぶだけ。g24 に無い。python の `zstandard` で展開する(Phase 2-a) |
-| 120B と 20B のロードが往復して遅い | Phase 2-4 の `OLLAMA_MAX_LOADED_MODELS=2` 未設定。設定できないなら全 tier を `fablet-code` に統一 |
+| 120B と 20B のロードが往復して遅い | Phase 2-4 の `OLLAMA_MAX_LOADED_MODELS=2` 未設定。設定できないなら全 tier を `fable-t` に統一 |
 
 ## Phase 8: チャット用途(`fablet-chat`)
 
@@ -388,7 +403,7 @@ docker run -d -p 3000:8080 \
   && ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; cd ~/fablet && ~/ollama-dist/bin/ollama create fablet-chat -f Modelfile"
 ```
 
-> `build-modelfile.sh` が生成する `Modelfile` は SYSTEM を含む。**`fablet-code` のビルドには絶対に使わない**(`Modelfile.code` を使う)。
+> `build-modelfile.sh` が生成する `Modelfile` は SYSTEM を含む。**`fable-t` のビルドには絶対に使わない**(`Modelfile.fable-t` を使う)。
 
 ## Phase 9: 使用後のクリーンアップ(`cleanup.sh`)
 
@@ -401,7 +416,7 @@ g24 は共用機である。`gpt-oss:120b` はロードされている間 **65�
 
 ### ディスク上の「キャッシュ」について
 
-**FableT がディスクに追加した容量は実質ゼロである。** `fablet-code` / `fablet-fast` / `fablet-chat` はいずれも派生モデルで、blob(重み本体)をベースモデルと共有し、固有に持つのはマニフェストと `fablet-chat` の SYSTEM レイヤー(数十KB)だけである。したがって `--purge` を実行してもディスクはほぼ減らない。
+**FableT がディスクに追加した容量は実質ゼロである。** `fable-t` / `fablet-fast` / `fablet-chat` はいずれも派生モデルで、blob(重み本体)をベースモデルと共有し、固有に持つのはマニフェストと `fablet-chat` の SYSTEM レイヤー(数十KB)だけである。したがって `--purge` を実行してもディスクはほぼ減らない。
 
 実際に容量を食っているのは `gpt-oss:120b`(65GB)等の**ベースモデルであり、これらは FableT 以前から存在し他ユーザーも使う**。`cleanup.sh` は意図的にこれらに触れない。ベースモデルを消すのは g24 の管理判断であって、本プロジェクトの後片付けの範囲外である。
 

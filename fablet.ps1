@@ -38,13 +38,13 @@ try {
 }
 if (Test-Endpoint "http://127.0.0.1:11500/api/version" "Ollama (g24 :11500 via tunnel)" `
     "自動起動も失敗。g24側のOllamaが停止している可能性: ssh g24 で入り setsid nohup ~/ollama-dist/start.sh を実行 (IMPLEMENTATION.md)") {
-    # fablet-code がモデル一覧に居るか(居なければローカル Ollama を見ている疑い)
+    # fable-t がモデル一覧に居るか(居なければローカル Ollama を見ている疑い)
     $tags = (Invoke-WebRequest -Uri "http://127.0.0.1:11500/api/tags" -UseBasicParsing -TimeoutSec 5).Content
-    if ($tags -notmatch "fablet-code") {
-        Write-Host "[NG] fablet-code が見えない — トンネルの先が違うか、モデル未作成 (IMPLEMENTATION.md Phase 2)" -ForegroundColor Red
+    if ($tags -notmatch "fable-t") {
+        Write-Host "[NG] fable-t が見えない — トンネルの先が違うか、モデル未作成 (IMPLEMENTATION.md Phase 2)" -ForegroundColor Red
         $ok = $false
     } else {
-        Write-Host "[OK] fablet-code visible" -ForegroundColor Green
+        Write-Host "[OK] fable-t visible" -ForegroundColor Green
     }
 } else { $ok = $false }
 
