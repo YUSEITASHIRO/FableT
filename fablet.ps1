@@ -82,5 +82,11 @@ $env:ANTHROPIC_AUTH_TOKEN = "fablet-local"
 $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY = "1"
 $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = "80000"    # 131kまで使えるが、プレフィル時間はターン毎に文脈長に比例して伸びる。80kで頭打ちにする
 
-Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model でモデル切替。`n" -ForegroundColor Cyan
-claude --append-system-prompt $fableCore @args
+# /model を fable の3名称に固定する。availableModels + enforceAvailableModels
+# (fablet.settings.json) により、Opus/Sonnet/Haiku 等の組込みエントリは選択不能になり、
+# Default も allowlist 先頭(fable-t-mid)へ解決される。--settings はこのセッション
+# 限りなので、素の claude(本物のAnthropic)には影響しない。
+$fableSettings = Join-Path $here "fablet.settings.json"
+
+Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model でモデル切替(fable-t / fable-t-mid)。`n" -ForegroundColor Cyan
+claude --settings $fableSettings --model "ollama/fable-t-mid" --append-system-prompt $fableCore @args

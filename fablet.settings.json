@@ -1,0 +1,4 @@
+{
+  "availableModels": ["ollama/fable-t-mid", "ollama/fable-t", "ollama/fable-t-o"],
+  "enforceAvailableModels": true
+}

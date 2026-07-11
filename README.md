@@ -53,11 +53,12 @@ fablet                          # ② 起動([OK]が3つ並ぶのを確認)
 | 名前 | 実体 | いつ使われるか |
 |---|---|---|
 | `fable-t-mid` | qwen3:30b-a3b(30B) | **既定。** 普通に話しかけるとこれが応える。速い |
-| `fable-t` | gpt-oss:120b(120B) | `/model opus` で切替。難しい設計判断・複雑なバグ向け。賢い |
+| `fable-t` | gpt-oss:120b(120B) | 難しい設計判断・複雑なバグ向け。賢い |
 | `fable-t-o` | `fable-t` と同じ重み | `/office` の7役が自動で使う。**自分で選ぶ必要はない** |
 
-- 切替は `/model opus`(120Bへ)/ `/model sonnet`(30Bへ戻す)。`/model ollama/fable-t` のように名前で直接指定してもよい
-- `/model` の一覧に出てくる `Opus` / `Sonnet` / `Haiku` という組込みラベルは Claude Code の仕様で消せないが、**FableT 経由ならどれを選んでも中身は上記のローカルモデル**であり、クレジットは消費しない(opus→`fable-t`、sonnet/haiku→`fable-t-mid` に変換される)
+- **選べるのはこの3つだけ。** 起動時に `fablet.settings.json` の allowlist(`availableModels` + `enforceAvailableModels`)が適用され、`Opus` / `Sonnet` / `Haiku` といった紛らわしい組込みエントリは選択不能になる。`Default` も `fable-t-mid` に解決される
+- 切替は名前で指定する: `/model ollama/fable-t`(120Bへ)/ `/model ollama/fable-t-mid`(30Bへ戻す)
+- この制限は `fablet` で起動したセッション限り。素の `claude`(本物のAnthropic)には影響しない
 - 両モデルは GPU に同時常駐するので、切替でロード待ちは発生しない(96GB VRAM の場合)
 
 ## 終わったら
