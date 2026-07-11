@@ -2,7 +2,23 @@
 
 **Claude のクレジットを1円も消費せずに、Claude Code のフル機能でコーディングする環境。**
 
-Claude Code CLI をローカルプロキシ経由で共有 GPU 機 g24 の Ollama に接続し、推論をすべてローカルモデル(gpt-oss:120b / qwen3:30b-a3b)で行う。さらに7役のエージェントが議論して方針を固めてから実装する「オフィス型」ワークフローを備える。
+Claude Code CLI をローカルプロキシ経由で GPU 機の Ollama に接続し、推論をすべてローカルモデル(gpt-oss:120b / qwen3:30b-a3b)で行う。さらに7役のエージェントが議論して方針を固めてから実装する「オフィス型」ワークフローを備える。
+
+## はじめに(初めての方へ)
+
+FableT は「Windows PC(Claude Code を動かす手元機)+ SSH でつながる GPU を積んだ Linux 機」という作者自身の構成をもとに作られた実例である。ドキュメント中に出てくる次の2つは**作者の環境の実値**であり、あなたの環境に読み替える必要がある:
+
+- **`g24`** — 作者が自分の `~/.ssh/config` に張った GPU 機への SSH エイリアス名。**最も手軽なのは、あなた自身の GPU 機にも同じ名前 `g24` でエイリアスを作ることである**(スクリプトを一切書き換えずに済む)。別の名前にしたい場合は `fablet.ps1` / `cleanup.sh` / `vram.sh` 内の `g24` という文字列をあなたのエイリアス名に置き換えればよい
+- **`C:\Users\yusei\Desktop\FableT`** — 作者の実際のクローン先パス。あなたが `git clone` した先のパスに読み替えること
+
+前提条件:
+
+- Windows 11 + PowerShell、[Claude Code CLI](https://docs.claude.com/claude-code) インストール済み
+- GPU を持つ Linux 機への **SSH 鍵認証アクセス**(パスワード認証不可。`~/.ssh/config` に `Host g24` エイリアスを用意)
+- そのLinux機に **Ollama 0.20 以上をユーザー空間で導入**できること(sudo不要な手順が [IMPLEMENTATION.md](IMPLEMENTATION.md) Phase 2 にある)
+- 目安 VRAM: `fablet-code`(120B相当)単体なら **70GiB 前後**、`fablet-mid`(30B相当)と同時常駐させるなら **90GiB 前後**。作者の実機は RTX PRO 6000(96GB)だが、これより小さいGPUでも **`fablet-mid` 系(30B以下)のみを opus/sonnet/haiku 全tierに割り当てる**構成にすれば動く(下記「モデル構成」参照)
+
+**初回セットアップの全手順**(SSHトンネル、Ollamaのユーザー空間導入、モデル作成、プロキシ設定)は [IMPLEMENTATION.md](IMPLEMENTATION.md) の Phase 0〜5 にまとまっている。以下のクイックスタートは、そのセットアップが完了した後の**日常の起動手順**である。
 
 ## なぜ FableT か
 
@@ -73,7 +89,9 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 /model ollama/fablet-code   # ゲートウェイのモデル名を直接指定してもよい
 ```
 
-両モデル合計 ~87GB は 96GB VRAM に同時常駐でき、切替でロード待ちは発生しない。tier の割り当ては `~/.fcc/.env` の3行(`MODEL_OPUS` 等)で一元管理される。
+両モデル合計 ~87GB は 96GB VRAM に同時常駐でき、切替でロード待ちは発生しない(作者の実機基準)。tier の割り当ては `~/.fcc/.env`(GPU機側に自分で作成する設定ファイル。リポジトリには含まれない)の3行(`MODEL_OPUS` 等)で一元管理される。
+
+**VRAMが90GBに満たない場合**は、`MODEL_OPUS` も `fablet-mid`(30B)相当に振れば、120Bモデルを常駐させずに済む。速度は落ちるが、追加コストゼロの原則は変わらない。
 
 ## ベンチマーク結果
 
@@ -171,10 +189,12 @@ function fablet { & "C:\Users\yusei\Desktop\FableT\fablet.ps1" @args }
 | [CLAUDE.md](CLAUDE.md) | セッションのプロジェクト規約 |
 | [FABLE.md](FABLE.md) | 人格・思考規律の原典。抽出物が `fable-*.txt` |
 
+> DESIGN.md / IMPLEMENTATION.md / OFFICE.md は作者自身の開発ログとして書かれている。`g24` やパスの実値は作者の環境のものなので、読者は自分の環境に読み替えること。初めてのセットアップは、まず本README「はじめに」を読んでから進めるとよい。
+
 ## アーキテクチャ
 
 ```
-[Windows PC]                                  [g24 (RTX PRO 6000 96GB)]
+[Windows PC]                        [GPU機(例: SSHエイリアス g24。作者実機: RTX PRO 6000 96GB)]
 
   Claude Code CLI (fablet.ps1 が起動・環境注入)
        │ ANTHROPIC_BASE_URL=http://127.0.0.1:8082 (ダミートークン)

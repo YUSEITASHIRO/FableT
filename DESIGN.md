@@ -4,6 +4,8 @@
 
 参照: [free-claude-code (Alishahryar1)](https://github.com/Alishahryar1/free-claude-code)
 
+> **本書は作者自身の開発ログである。** `g24` は作者が自分の GPU 機に張った SSH エイリアス名、パスやVRAM値は作者の実環境の実測値であり、読者は自分の環境の値に読み替えること。初めてセットアップする場合は、まず [README.md](README.md) の「はじめに」を読むこと。
+
 ---
 
 ## 0. 方針転換の要旨
