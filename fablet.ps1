@@ -48,6 +48,26 @@ if (Test-Endpoint "http://127.0.0.1:11500/api/version" "Ollama (g24 :11500 via t
     }
 } else { $ok = $false }
 
+# 1-b. VRAM の空きを見る。g24 は共用機で、他ユーザーのジョブが VRAM を握っていると
+#      120B(fable-t, 約69GiB)はロードされても CPU へスピルし、数十倍遅くなる
+#      (2026-07-12 実際に発生: 他ユーザーが 75GiB 占有 → fable-t が 31% GPU)。
+#      落とさず警告に留める。30B(fable-t-mid, 約22GiB)だけなら問題なく動く。
+if ($ok) {
+    try {
+        $freeMiB = [int](ssh g24 "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits" | Select-Object -First 1)
+        $freeGiB = [math]::Round($freeMiB / 1024, 0)
+        if ($freeMiB -lt 24000) {
+            Write-Host "[!!] GPU 空き ${freeGiB}GiB — 30B(fable-t-mid, 22GiB)すら載らない。他ユーザーの使用状況を ./vram.sh で確認すること" -ForegroundColor Red
+        } elseif ($freeMiB -lt 72000) {
+            Write-Host "[!] GPU 空き ${freeGiB}GiB — 120B(fable-t, 69GiB)は CPU へスピルして激遅になる。fable-t-mid(既定)で作業し、/office のフル予算は空くまで待つこと" -ForegroundColor Yellow
+        } else {
+            Write-Host "[OK] GPU 空き ${freeGiB}GiB (120B/30B とも常駐可)" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "[--] VRAM 確認をスキップ(ssh 応答なし)" -ForegroundColor DarkGray
+    }
+}
+
 # 2. fcc-server — 落ちていたら別窓(最小化)で自動起動する。
 #    ログが見える・止めたければその窓を閉じればよい、を優先して隠しにはしない。
 #    注意: /v1/models は認証必須。ヘッダなしで叩くと 401 が返り「生きているのに死んだ」と

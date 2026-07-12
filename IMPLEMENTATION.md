@@ -9,7 +9,7 @@
 
 | ファイル / 成果物 | 場所 | 役割 |
 |---|---|---|
-| `Modelfile.fable-t` | ローカル → g24 | `fable-t` の定義(SYSTEMなし・131k ctx) |
+| `Modelfile.fable-t` | ローカル → g24 | `fable-t` の定義(SYSTEMなし・131k ctx・**Reasoning: high 固定**の TEMPLATE 込み) |
 | `Modelfile.fable-t-mid` | ローカル → g24 | `fable-t-mid` の定義(SYSTEMなし・65k ctx) |
 | `Modelfile.fast` | ローカル → g24 | `fablet-fast` の定義(Haiku tier用) |
 | `fable-t` / `fable-t-mid` / `fable-t-o` / `fablet-fast` | g24 | Ollamaモデル(`fable-t-o` は `ollama cp` による `fable-t` の別名タグ。`/office`の7役全員がこれを使う) |
@@ -151,17 +151,15 @@ ssh g24 "ollama cp fablet fablet-chat && ollama rm fablet && ollama list | grep 
 
 ### 2-1. Modelfile を書く
 
+**`Modelfile.fable-t` はリポジトリに入っているものをそのまま使う。ここで再生成してはならない。**
+このファイルには gpt-oss の TEMPLATE 複製が含まれており、`Reasoning: high` を固定するために
+必要である(単純な `FROM gpt-oss:120b` + PARAMETER だけでは推論量が medium に戻る。理由は
+ファイル冒頭のコメント参照)。
+
+残る2つは以下で作る:
+
 ```bash
 cd /c/Users/yusei/Desktop/FableT
-
-cat > Modelfile.fable-t << 'EOF'
-FROM gpt-oss:120b
-
-# SYSTEM は意図的に定義しない。Claude Code が system prompt を供給する。
-
-PARAMETER num_ctx 131072
-PARAMETER temperature 1.0
-EOF
 
 cat > Modelfile.fable-t-mid << 'EOF'
 FROM qwen3:30b-a3b
@@ -203,6 +201,13 @@ ssh g24 "export OLLAMA_HOST=127.0.0.1:11500; cd ~/fablet \
 ```bash
 ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fable-t --system"   # → 何も出ない
 ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show fablet-chat --system | head -3"  # → 人格プロンプト
+```
+
+あわせて推論量が high に固定されていることも確認する(`fable-t` と `fable-t-o` の両方):
+
+```bash
+ssh g24 "OLLAMA_HOST=127.0.0.1:11500 ~/ollama-dist/bin/ollama show --template fable-t | grep -n 'Reasoning:'"
+# → 2行とも "Reasoning: high" であること。medium が残っていたら Modelfile.fable-t を再生成してしまっている
 ```
 
 ### 2-4. VRAM 実測(最重要チェック)

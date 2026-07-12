@@ -48,6 +48,24 @@ fablet                          # ② 起動([OK]が3つ並ぶのを確認)
 - **自明な依頼(typo修正・1行変更)は会議を自動スキップ**して直接実装される。些末な依頼で数十分待たされることはない
 - ただし**フル会議は重い**(モデルを7回以上呼ぶため数十分かかることがある)。急ぎで答えだけ欲しいときは `/office` を付けずに普通に依頼してよい
 
+### 品質は「試行回数」で買う
+
+ローカル推論はクレジットを消費しない。だから FableT は、**一発の名答で勝とうとせず、
+何度も試して機械に選ばせる**。オフィスには3段階の予算がある:
+
+| 予算 | いつ | 何をするか |
+|---|---|---|
+| 即答 | typo・1行変更 | 会議を飛ばして直接実装 |
+| **標準**(既定) | 通常の実装依頼 | 受入テストを先に書いてから実装し、緑を確認して検収 |
+| フル | 難題・急がない依頼 | 実装を**3案**作り、受入テストの通過数で勝者を選び、批評ループで詰める |
+
+フルを使うには依頼にそう書く: `/office じっくりで。認証をトークン方式に移行して`
+
+どの予算でも共通の規律が1つある——**「動くはず」は完了ではない。テストの緑のログだけが完了の証拠**。
+実行痕跡のない完了報告は差し戻される。
+
+> フル予算は 120B を何度も呼ぶ。GPU が空いていないと激遅になるので、起動時の `[OK] GPU 空き` 行を見てから使うこと。
+
 ## モデルは実質2つ + 会議用1つ
 
 | 名前 | 実体 | いつ使われるか |
@@ -133,6 +151,16 @@ GPU が小さい場合は `MODEL_OPUS` も `ollama/fable-t-mid` にすれば 120
 - 数学は特に強い(GSM8K 98%)。**日本語の専門知識は弱い**(JMMLU 80%前後)ので、ドメイン知識が要る作業は一次資料をセッションに読み込ませること
 - 単発QAのベンチであり、エージェンティックコーディング性能そのものではない点に注意
 
+**エージェント性能**(実際にリポジトリを直せるか)は [bench/agentic](bench/agentic/) で測る。
+壊れたコードと隠しテストを与えて機械採点し、`pass@1`(1回で通る確率)と `pass@k`(k回のうち
+1回でも通る確率)を出す。FableT の勝ち筋は「**pass@k がクラウドの pass@1 を上回る**」ことで、
+無料ゆえに k を好きなだけ上げられるのが根拠である。
+
+```powershell
+cd bench\agentic
+.\run.ps1 -Agent fablet -K 3      # ローカル・無料。GPU が空いているときに
+```
+
 ## クレジットについて
 
 | 起動方法 | 接続先 | クレジット消費 |
@@ -169,7 +197,8 @@ GPU が小さい場合は `MODEL_OPUS` も `ollama/fable-t-mid` にすれば 120
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | セットアップ手順書(Phase 0〜5)とトラブルシューティング |
 | [DESIGN.md](DESIGN.md) | 設計の経緯とアーキテクチャの詳細 |
 | [OFFICE.md](OFFICE.md) | オフィスモードの設計と監査記録 |
-| [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) | 350問ベンチの方法・内訳・考察 |
+| [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) | 350問ベンチ(単発QA)の方法・内訳・考察 |
+| [bench/agentic/](bench/agentic/) | エージェント性能(pass@k)を測るベンチと、その土俵の限界 |
 | [CLAUDE.md](CLAUDE.md) | セッションのプロジェクト規約 |
 | [FABLE.md](FABLE.md) | 思考規律の原典。抽出物 `fable-coding.txt` が起動時に system prompt へ注入される |
 
@@ -179,4 +208,6 @@ GPU が小さい場合は `MODEL_OPUS` も `ollama/fable-t-mid` にすれば 120
 
 - Windows 11 + Claude Code CLI + uv + 鍵認証済みの `ssh g24`
 - GPU機: RTX PRO 6000(96GB)、ユーザー空間 Ollama **0.20 以上**(`~/ollama-dist`、`:11500`、flash attention + KV q8_0)
-- モデル: `fable-t`(gpt-oss:120b, 131k ctx)/ `fable-t-mid`(qwen3:30b-a3b, 64k ctx)/ `fable-t-o`(`fable-t`と同重み・`/office`用)/ `fablet-fast`(gpt-oss:20b・予備)/ `fablet-chat`(人格入り・相談用)
+- モデル: `fable-t`(gpt-oss:120b, 131k ctx, **Reasoning: high** 固定)/ `fable-t-mid`(qwen3:30b-a3b, 64k ctx)/ `fable-t-o`(`fable-t`と同重み・`/office`用)/ `fablet-fast`(gpt-oss:20b・予備)/ `fablet-chat`(人格入り・相談用)
+- **共用機なので VRAM は常に空いているとは限らない。** 他ユーザーが握っていると 120B は CPU へ
+  スピルして激遅になる。起動時に空きを表示するので、赤/黄の警告が出たら 30B で作業するか待つこと

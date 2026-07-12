@@ -32,9 +32,20 @@ IMPLEMENTATION.md を参照。
   `anthropic/ollama/<名前>` と `…:latest` の両形で公開する(fable-t-o のみ
   :latest 形だけ)ため、fable-t / fable-t-mid は prefixed 形、fable-t-o は
   bare 形(エージェント frontmatter と同一文字列)を1つずつ載せる。
-- `/office` と7エージェントは plugin/ ディレクトリ(--plugin-dir で注入)
-  にある。どのプロジェクトから fablet を起動しても利用可能。7役は全員
+- `/office` と8エージェントは plugin/ ディレクトリ(--plugin-dir で注入)
+  にある。どのプロジェクトから fablet を起動しても利用可能。全役が
   `model: ollama/fable-t-o` を直接指定し、役ごとに分けず同じモデルで発言する。
+- `/office` は「検証器ファースト」で動く: 受入テストを実装前に固定し、緑のログだけを
+  完了の証拠とする。予算は即答/標準/フルの3段(フルは best-of-N=3 + critic ループ)。
+  ローカル推論は無料なので、品質は賢さではなく試行回数で買う——これがこのプロジェクトの
+  中心的な設計思想である(plugin/commands/office.md)。
+- `fable-t` / `fable-t-o` は **Reasoning: high 固定**。gpt-oss の推論量は system メッセージの
+  `Reasoning:` 行で決まり、Modelfile の PARAMETER では指定できない(`unknown parameter 'think'`)。
+  さらに Ollama サーバは think 未指定のリクエストにも medium を注入するため、TEMPLATE の
+  両分岐を high に固定してある(Modelfile.fable-t)。
+- **g24 の VRAM は他ユーザーと奪い合いである。** 空きが 70GiB 未満だと 120B は CPU へ
+  スピルして激遅になる。fablet 起動時と bench/agentic/run.ps1 が空きを検査して警告・中止する。
+  「遅い」と感じたらまず `./vram.sh`。
 - `.env` などのシークレットをコミット・表示・外部送信しない。
 - **g24 は共用 GPU 機。汚さないことは機能要件である。** セッション終了時は必ず
   ./cleanup.sh を実行し、モデルのアンロード(VRAM/RAM解放)まで確認する。
