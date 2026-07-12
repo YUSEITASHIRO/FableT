@@ -268,7 +268,7 @@ MODEL_HAIKU=ollama/fable-t-mid
 EOF
 ```
 
-> `/office` 会議のサブエージェント(`.claude/agents/*.md`)は tier を介さず、7役全員が `model: ollama/fable-t-o` を直接指定して呼ばれる。役ごとにモデルを分けず、主セッションの tier 割り当てとも独立している。
+> `/office` 会議のサブエージェント(`plugin/agents/*.md`、fablet.ps1 が `--plugin-dir` で注入)は tier を介さず、7役全員が `model: ollama/fable-t-o` を直接指定して呼ばれる。役ごとにモデルを分けず、主セッションの tier 割り当てとも独立している。
 
 クラウド無料枠へ切り替える場合は `NVIDIA_NIM_API_KEY` 等を足し、`MODEL_OPUS` だけを差し替える。**業務コードでは既定でローカル(`ollama/`)のみを使い、戻し忘れに注意する**([DESIGN.md 4.1](DESIGN.md))。
 

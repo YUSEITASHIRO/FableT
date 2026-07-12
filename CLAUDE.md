@@ -9,7 +9,7 @@ IMPLEMENTATION.md を参照。
 - 思考規律は fable-coding.txt(起動時に system prompt へ追記される)に従う:
   読んでから書く、最小の変更、検証ループを閉じる、検証した/していないを分けて報告。
 - 方針が割れうる規模のタスクは `/office <依頼>` の会議プロトコルに掛ける。
-  自明なタスクは直接こなしてよい(判定規準は .claude/commands/office.md 冒頭)。
+  自明なタスクは直接こなしてよい(判定規準は plugin/commands/office.md 冒頭)。
 - サブエージェントは逐次で呼ぶ。バックエンドの Ollama は並列度1。
 
 ## 環境の注意(過去の事故から)
@@ -24,8 +24,11 @@ IMPLEMENTATION.md を参照。
   Opus/Sonnet/Haiku の組込みエントリは選択不能、Default は fable-t-mid。
   切替は `/model ollama/fable-t` のように名前で行う。fcc の tier 変換
   (~/.fcc/.env)は内部処理用に維持: opus → `fable-t`、sonnet/haiku →
-  `fable-t-mid`。`/office` の7役は全員 `.claude/agents/*.md` の `model:`
-  に `ollama/fable-t-o` を直接指定し、役ごとに分けず同じモデルで発言する。
+  `fable-t-mid`。allowlist には fcc 公開 ID(anthropic/ollama/... 付き)と
+  bare 名の両方を載せること(片方だけだと enforcement がスキップされる)。
+- `/office` と7エージェントは plugin/ ディレクトリ(--plugin-dir で注入)
+  にある。どのプロジェクトから fablet を起動しても利用可能。7役は全員
+  `model: ollama/fable-t-o` を直接指定し、役ごとに分けず同じモデルで発言する。
 - `.env` などのシークレットをコミット・表示・外部送信しない。
 - **g24 は共用 GPU 機。汚さないことは機能要件である。** セッション終了時は必ず
   ./cleanup.sh を実行し、モデルのアンロード(VRAM/RAM解放)まで確認する。

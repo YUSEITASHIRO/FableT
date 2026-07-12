@@ -30,7 +30,7 @@ fablet                          # ② 起動([OK]が3つ並ぶのを確認)
 
 ## オフィスモード(`/office`)とは
 
-`/office <依頼>` と打つと、**7人の担当者が会議をしてから実装する**。あなたが7人を個別に操作する必要はない——依頼文を1回書けば、あとは自動で進む。
+`/office <依頼>` と打つと、**7人の担当者が会議をしてから実装する**。あなたが7人を個別に操作する必要はない——依頼文を1回書けば、あとは自動で進む。`/office` はランチャがプラグインとして注入する(`--plugin-dir`)ため、**どのプロジェクトのディレクトリから起動してもコピー不要でそのまま使える**。
 
 | 順番 | 担当 | やること |
 |---|---|---|
@@ -114,7 +114,7 @@ MODEL_SONNET=ollama/fable-t-mid
 MODEL_HAIKU=ollama/fable-t-mid
 ```
 
-GPU が小さい場合は `MODEL_OPUS` も `ollama/fable-t-mid` にすれば 120B を持たずに済む(`.claude/agents/*.md` の `model:` も `ollama/fable-t-mid` 相当に合わせる)。品質は落ちるがクレジットゼロの原則は変わらない。
+GPU が小さい場合は `MODEL_OPUS` も `ollama/fable-t-mid` にすれば 120B を持たずに済む(`plugin/agents/*.md` の `model:` も `ollama/fable-t-mid` 相当に合わせる)。品質は落ちるがクレジットゼロの原則は変わらない。
 
 ## 性能(実測)
 

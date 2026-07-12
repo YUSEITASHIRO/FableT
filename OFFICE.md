@@ -51,7 +51,7 @@ DESIGN.md 0章の表は新方針で「人格が効く」と結論するが、そ
 形を変えてそのまま残っている。→ 本書2章で解消する。
 
 > **対処状況(2026-07-11)**: 2章の3層供給を実装済み(fablet.ps1 が L1 を注入、
-> `.claude/agents/` が L2 を保持、L3 は fablet-chat のまま)。
+> エージェント定義が L2 を保持(現在は `plugin/agents/`)、L3 は fablet-chat のまま)。
 
 ### 🟠 P4: Haiku tier の 32k ctx は黙って切り捨てられる
 
@@ -81,7 +81,7 @@ Claude Code が Haiku tier に投げる内部処理(要約・会話タイトル�
 | 層 | 供給物 | 供給経路 | 効く範囲 |
 |---|---|---|---|
 | L1 | `fable-coding.txt`(1.4KB・loop工学の核) | 起動スクリプトが `--append-system-prompt` で注入 | セッション全体 |
-| L2 | 各エージェントの人格断片(役割ごとに FABLE.md から抽出) | `.claude/agents/*.md` の本文 | そのエージェント |
+| L2 | 各エージェントの人格断片(役割ごとに FABLE.md から抽出) | `plugin/agents/*.md` の本文 | そのエージェント |
 | L3 | FABLE.md 全文 | `fablet-chat`(従来どおり) | 相談・文章用途 |
 
 L1 はハーネスの system prompt を**置換せず追記**するので、ツール運用と矛盾しない。
@@ -89,7 +89,7 @@ L1 はハーネスの system prompt を**置換せず追記**するので、ツ�
 
 ## 3. オフィス — 7役のエージェント
 
-`.claude/agents/` に定義。主セッション(あなたが話している Claude Code 本体)が
+`plugin/agents/` に定義(fablet.ps1 が `--plugin-dir` で注入)。主セッション(あなたが話している Claude Code 本体)が
 **PM(司会)**を務め、Agent ツールで各役を呼ぶ。
 
 | 役 | name | tier | ツール | 責務 |

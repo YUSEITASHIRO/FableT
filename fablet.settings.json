@@ -1,4 +1,11 @@
 {
-  "availableModels": ["ollama/fable-t-mid", "ollama/fable-t", "ollama/fable-t-o"],
+  "availableModels": [
+    "anthropic/ollama/fable-t-mid",
+    "anthropic/ollama/fable-t",
+    "anthropic/ollama/fable-t-o",
+    "ollama/fable-t-mid",
+    "ollama/fable-t",
+    "ollama/fable-t-o"
+  ],
   "enforceAvailableModels": true
 }
