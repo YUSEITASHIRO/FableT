@@ -139,8 +139,28 @@ if ($cfg.backend -ne "anthropic") {
 # (2026-07-12: 空き 0GiB で全試行 9 秒 FAIL、という無意味な結果を実際に出した)。
 if ($cfg.backend -eq "local") {
     $need = if ($cfg.model -match "fable-t$|raw-gptoss") { 72000 } else { 22000 }   # 120B は 69GiB、30B は 22GiB
+
+    # 前のアームのモデルが載ったままだと、その VRAM を「他人が占有している」と誤認して中止する
+    # (2026-07-12 実際に発生: fable-t-mid を載せたまま raw-qwen を始めようとして空き0GiB判定)。
+    # これから使うモデル以外の FableT モデルは先にアンロードして、正味の空きで判断する。
+    $target = ($cfg.model -replace "^anthropic/ollama/", "") -replace ":latest$", ""
+    $ol = "OLLAMA_HOST=127.0.0.1:11500 `$HOME/ollama-dist/bin/ollama"
+    $owned = @("fable-t", "fable-t-mid", "fable-t-o", "raw-gptoss", "raw-qwen", "fablet-fast", "fablet-chat")
+    foreach ($m in ($owned | Where-Object { $_ -ne $target })) {
+        ssh g24 "$ol stop $m 2>/dev/null" | Out-Null
+    }
+    Start-Sleep -Seconds 3
+
     try {
         $freeMiB = [int](ssh g24 "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits" | Select-Object -First 1)
+
+        # 目的のモデルが既にロード済みなら、その分の VRAM は確保済みなので空きに足して判断する
+        $loaded = (ssh g24 "$ol ps") -join "`n"
+        if ($loaded -match [regex]::Escape($target)) {
+            Write-Host "[OK] $target は既にロード済み(VRAM 確保済み)" -ForegroundColor Green
+            $freeMiB += $need
+        }
+
         if ($freeMiB -lt $need) {
             Write-Host ("中止: GPU 空き {0}GiB < 必要 {1}GiB。CPU へスピルして測定にならない。" -f `
                 [math]::Round($freeMiB / 1024, 0), [math]::Round($need / 1024, 0)) -ForegroundColor Red
