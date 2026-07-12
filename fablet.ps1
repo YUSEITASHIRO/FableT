@@ -2,9 +2,55 @@
 # 経路(SSHトンネル → fcc-server)の生存を確認してから Claude Code を起動する。
 # 黙って IPv6 に逃げる事故(IMPLEMENTATION.md Phase 3)を再発させないため、
 # 確認は全て 127.0.0.1 に対して行う。
+#
+#   fablet              通常起動。終了時に g24 のモデルを自動アンロードする
+#   fablet -Shutdown    Windows 側の常駐(fcc-server とトンネル)も落として完全に片付ける
+#
+# fcc-server は窓を出さない。UI は持っておらず(HTTP は 401 を返す API プロキシ)、
+# 窓はログが流れるだけだったため。ログは $env:TEMP\fablet-fcc.log に出る。
+
+param(
+    [switch]$Shutdown
+)
 
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$fccLog = Join-Path $env:TEMP "fablet-fcc.log"
+
+# g24 上でロードされている FableT のモデルをアンロードする。VRAM を握ったままにしないための、
+# このプロジェクトの最重要の後始末(g24 は共用機)。
+function Release-G24 {
+    Write-Host "`n[..] g24 のモデルを解放中..." -ForegroundColor DarkGray
+    try {
+        $ol = "OLLAMA_HOST=127.0.0.1:11500 `$HOME/ollama-dist/bin/ollama"
+        ssh g24 "for m in fable-t fable-t-mid fable-t-o fablet-fast fablet-chat; do $ol stop `$m 2>/dev/null; done; $ol ps" | Out-Null
+        $remaining = (ssh g24 "$ol ps" | Select-Object -Skip 1) -join ""
+        if ([string]::IsNullOrWhiteSpace($remaining)) {
+            Write-Host "[OK] g24 のモデルをアンロードした(VRAM 解放済み)" -ForegroundColor Green
+        } else {
+            Write-Host "[!] まだロード中のモデルがある: $remaining" -ForegroundColor Yellow
+            Write-Host "    ./cleanup.sh で確認すること" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[!] g24 への接続に失敗した。手動で ./cleanup.sh を実行すること" -ForegroundColor Red
+    }
+}
+
+# Windows 側の常駐を落とす(-Shutdown 用)。GPU は使っていないので通常は残してよいが、
+# 「全部消したい」ときのために明示的な出口を用意する。
+function Stop-LocalServices {
+    Get-Process fcc-server -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" |
+        Where-Object { $_.CommandLine -match "11500:localhost:11500" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Write-Host "[OK] fcc-server と SSH トンネルを停止した" -ForegroundColor Green
+}
+
+if ($Shutdown) {
+    Release-G24
+    Stop-LocalServices
+    exit 0
+}
 
 function Test-Endpoint($url, $name, $hint, $headers) {
     try {
@@ -70,16 +116,16 @@ if ($ok) {
     }
 }
 
-# 2. fcc-server — 落ちていたら別窓(最小化)で自動起動する。
-#    ログが見える・止めたければその窓を閉じればよい、を優先して隠しにはしない。
+# 2. fcc-server — 落ちていたら自動起動する。窓は出さない(UI は持たず、ログが流れるだけの
+#    コンソールだった)。ログは $fccLog に出るので、不調時はそれを読む。
 #    注意: /v1/models は認証必須。ヘッダなしで叩くと 401 が返り「生きているのに死んだ」と
 #    誤判定し、二重起動→ポート衝突の連鎖になる(2026-07-11 実際に発生)。
 $fccHeaders = @{ "x-api-key" = "fablet-local" }
 try {
     Invoke-WebRequest -Uri "http://127.0.0.1:8082/v1/models" -Headers $fccHeaders -UseBasicParsing -TimeoutSec 2 | Out-Null
 } catch {
-    Write-Host "[..] fcc-server 未起動 — 最小化ウィンドウで自動起動する" -ForegroundColor Yellow
-    Start-Process fcc-server -WindowStyle Minimized
+    Write-Host "[..] fcc-server 未起動 — 自動起動する(窓なし。ログ: $fccLog)" -ForegroundColor Yellow
+    Start-Process fcc-server -WindowStyle Hidden -RedirectStandardOutput $fccLog -RedirectStandardError "$fccLog.err"
     foreach ($i in 1..10) {
         Start-Sleep -Seconds 2
         try {
@@ -119,5 +165,15 @@ $fableSettings = Join-Path $here "fablet.settings.json"
 # どのプロジェクトディレクトリから起動しても .claude\ のコピー無しで /office が使える。
 $fablePlugin = Join-Path $here "plugin"
 
-Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model を開いて一覧からモデル切替。`n" -ForegroundColor Cyan
-claude --settings $fableSettings --plugin-dir $fablePlugin --model "anthropic/ollama/fable-t-mid" --append-system-prompt $fableCore @args
+Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model を開いて一覧からモデル切替。" -ForegroundColor Cyan
+Write-Host "終了(/exit や Ctrl+C)で g24 のモデルは自動解放される。窓を×で強制終了した場合は" -ForegroundColor DarkGray
+Write-Host "g24 側の keep_alive(10分)が解放するので、VRAM が残り続けることはない。`n" -ForegroundColor DarkGray
+
+# claude をどう抜けても(正常終了・Ctrl+C・エラー)g24 を解放する。
+# ただし窓の × による強制終了(プロセス kill)では finally は走らない。その保険が
+# g24 側の OLLAMA_KEEP_ALIVE=10m である(start.sh)。両輪で「VRAM を握ったまま放置」を防ぐ。
+try {
+    claude --settings $fableSettings --plugin-dir $fablePlugin --model "anthropic/ollama/fable-t-mid" --append-system-prompt $fableCore @args
+} finally {
+    Release-G24
+}

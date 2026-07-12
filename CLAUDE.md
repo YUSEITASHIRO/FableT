@@ -47,7 +47,11 @@ IMPLEMENTATION.md を参照。
   スピルして激遅になる。fablet 起動時と bench/agentic/run.ps1 が空きを検査して警告・中止する。
   「遅い」と感じたらまず `./vram.sh`。
 - `.env` などのシークレットをコミット・表示・外部送信しない。
-- **g24 は共用 GPU 機。汚さないことは機能要件である。** セッション終了時は必ず
-  ./cleanup.sh を実行し、モデルのアンロード(VRAM/RAM解放)まで確認する。
+- **g24 は共用 GPU 機。汚さないことは機能要件である。** VRAM 解放は二重化してある:
+  fablet.ps1 の finally フック(正常終了時に自動アンロード)と、g24 側の
+  OLLAMA_KEEP_ALIVE=10m(窓を×で強制終了された場合の保険)。`fablet -Shutdown` で
+  Windows 側の常駐(fcc-server・トンネル)も含めて完全に片付く。
+  fcc-server は窓を出さない(UI を持たない API プロキシ。ログは %TEMP%\fablet-fcc.log)。
+  スクリプト外で作業したときは ./cleanup.sh を実行し、アンロードまで確認する。
   一時ファイルを g24 に置いたら作業終了時に消す。恒常的に必要なデータは
   g24 に置かず、ローカル(このPC)へ scp で取得して参照する。

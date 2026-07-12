@@ -88,11 +88,14 @@ ssh g24 "cat > ~/ollama-dist/start.sh << 'EOS'
 #!/bin/bash
 export OLLAMA_HOST=127.0.0.1:11500
 export OLLAMA_MODELS=\$HOME/ollama-models
-export OLLAMA_KEEP_ALIVE=2h
+export OLLAMA_KEEP_ALIVE=10m
 export OLLAMA_MAX_LOADED_MODELS=2
 exec \$HOME/ollama-dist/bin/ollama serve
 EOS
 chmod +x ~/ollama-dist/start.sh
+# KEEP_ALIVE は「窓を × で閉じられた」ときの保険である。ランチャは正常終了時にモデルを
+# アンロードするが、強制終了ではそれが走らない。10分あれば作業の中断に耐え、かつ共用機の
+# VRAM を長時間握り続けることもない(2h だと放置事故になる)。
 setsid nohup ~/ollama-dist/start.sh > ~/ollama-dist/server.log 2>&1 < /dev/null &"
 ```
 
@@ -411,7 +414,13 @@ docker run -d -p 3000:8080 \
 
 ## Phase 9: 使用後のクリーンアップ(`cleanup.sh`)
 
-g24 は共用機である。`gpt-oss:120b` はロードされている間 **65〜70GB の RAM または VRAM を占有し続ける**(`OLLAMA_KEEP_ALIVE` の間、既定5分)。作業を終えたら明示的に解放する。
+g24 は共用機である。`gpt-oss:120b` はロードされている間 **65〜70GB の VRAM を占有し続ける**。解放は二重化してある:
+
+1. **ランチャの終了時フック** — `/exit` や Ctrl+C で `fablet` を抜けると自動でアンロードする
+2. **`OLLAMA_KEEP_ALIVE=10m`** — 窓を × で強制終了され、上のフックが走らなかった場合の保険
+
+`fablet -Shutdown` は 1 に加えて Windows 側の常駐(fcc-server・SSH トンネル)も停止する。
+以下は手動で確認・解放したいときに使う。
 
 ```bash
 ./cleanup.sh            # ロード中モデルをアンロード(RAM/VRAM 解放)。安全・既定
