@@ -20,7 +20,7 @@ param(
     #   raw-qwen      30B、規律なし                            ← 同上
     #   opus         Claude Opus 4.8(本物の Anthropic)
     #   sonnet       Claude Sonnet(本物の Anthropic)
-    #   gpt / gpt-mini  OpenAI モデル(fcc 経由。OPENAI_API_KEY が必要)
+    #   gpt / gpt-mini  OpenAI モデル(gpt-proxy.ps1 が立てる LiteLLM 経由。OPENAI_API_KEY が必要)
     [ValidateSet("fable-t", "fable-t-mid", "raw-gptoss", "raw-qwen", "opus", "sonnet", "gpt", "gpt-mini")]
     [string]$Arm = "fable-t",
 
@@ -28,14 +28,19 @@ param(
     [string]$Task = "",
     [int]$TimeoutSec = 1800,
 
-    # エージェントに与える権限。
-    #   edit   (既定) — 編集は自動承認、Bash は与えない。採点は外部の verify.py が行うので、
-    #                   タスクを解くのに Bash は要らない。ホストで任意コマンドが走らない。
-    #   bypass         — 全権限を素通し。**ホスト上で任意のコマンドが実行される。**
+    # エージェントに与える権限。**モードが違う結果を混ぜて比較してはならない**(解ける範囲が変わる)。
+    #
+    #   python (既定) — 編集を自動承認し、加えて **python の実行だけ**を許す(Bash(python:*))。
+    #                   エージェントが自分でテストを書いて回し、失敗を読んで直す
+    #                   「検証ループ」を閉じられる。FableT の思考規律はまさにこれを要求しており、
+    #                   これを禁じると規律の効果は測れない(2026-07-12 の edit モード実測では
+    #                   規律あり/なしで差が出なかった。ループを封じていたため)。
+    #                   git・rm・curl 等は許可しないので、ホストで任意コマンドは走らない。
+    #   edit          — 編集のみ。Bash なし。「一発書き」の能力を測る。過去の測定はこの条件。
+    #   bypass        — 全権限を素通し。**ホスト上で任意のコマンドが実行される。**
     #                   使い捨てのサンドボックスでのみ使うこと。
-    # 権限モードが違う結果は比較しないこと(解ける範囲が変わる)。
-    [ValidateSet("edit", "bypass")]
-    [string]$Permissions = "edit"
+    [ValidateSet("python", "edit", "bypass")]
+    [string]$Permissions = "python"
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,9 +62,16 @@ $arms = @{
     "raw-qwen"    = @{ backend = "local";     model = "anthropic/ollama/raw-qwen:latest";   discipline = $false; note = "素の qwen3:30b(規律なし)" }
     "opus"        = @{ backend = "anthropic"; model = "opus";                         discipline = $false; note = "Claude Opus 4.8" }
     "sonnet"      = @{ backend = "anthropic"; model = "sonnet";                       discipline = $false; note = "Claude Sonnet" }
-    "gpt"         = @{ backend = "openai";    model = "anthropic/openai/gpt-5.4";      discipline = $false; note = "OpenAI gpt-5.4" }
-    "gpt-mini"    = @{ backend = "openai";    model = "anthropic/openai/gpt-5.4-mini"; discipline = $false; note = "OpenAI gpt-5.4-mini" }
+    # GPT は fcc では叩けない。fcc は "free-claude-code" の名のとおり無料プロバイダ専用で、
+    # OPENAI_API_KEY を受け付ける口が無い(NIM/OpenRouter/Gemini/DeepSeek/Groq 等のみ。
+    # 2026-07-12 にキーを渡して確認済み: OpenAI モデルは /v1/models に一切出ない)。
+    # そこで gpt-proxy.ps1 が LiteLLM を :8083 に立て、Anthropic 形式(/v1/messages)を
+    # OpenAI へ中継する。Claude Code から見れば fcc と同じ「Anthropic 互換の口」である。
+    "gpt"         = @{ backend = "openai";    model = "gpt-5.4";      discipline = $false; note = "OpenAI gpt-5.4 (LiteLLM 経由)" }
+    "gpt-mini"    = @{ backend = "openai";    model = "gpt-5.4-mini"; discipline = $false; note = "OpenAI gpt-5.4-mini (LiteLLM 経由)" }
 }
+
+$GPT_PROXY = "http://127.0.0.1:8083"
 
 $cfg = $arms[$Arm]
 Write-Host ("アーム: {0}  ({1})" -f $Arm, $cfg.note) -ForegroundColor Cyan
@@ -70,11 +82,14 @@ if ($cfg.backend -eq "anthropic") {
     Start-Sleep -Seconds 5
 }
 if ($cfg.backend -eq "openai") {
-    if (-not $env:OPENAI_API_KEY) {
-        Write-Host "中止: OPENAI_API_KEY が設定されていない。" -ForegroundColor Red
-        Write-Host "      このアームは fcc-server 経由で OpenAI を叩くため、fcc にキーを渡す必要がある。" -ForegroundColor Red
-        Write-Host "      fcc は全プロンプトが通過する第三者製プロキシである点を理解した上で、" -ForegroundColor Red
-        Write-Host "      使い捨ての・上限を絞ったキーだけを使うこと(README の注意を読むこと)。" -ForegroundColor Red
+    # 中継は gpt-proxy.ps1 が立てる LiteLLM(:8083)。ここでは生きているかだけ見る。
+    # キーはプロキシのプロセスが持つので、この run.ps1 はキーを触らない。
+    try {
+        Invoke-WebRequest -Uri "$GPT_PROXY/health/liveliness" -UseBasicParsing -TimeoutSec 3 | Out-Null
+    } catch {
+        Write-Host "中止: GPT 中継プロキシ($GPT_PROXY)が動いていない。" -ForegroundColor Red
+        Write-Host "      先に別ウィンドウで .\gpt-proxy.ps1 を起動すること。" -ForegroundColor Red
+        Write-Host "      (fcc は無料プロバイダ専用で OpenAI を扱えないため、LiteLLM で中継する)" -ForegroundColor Red
         exit 1
     }
     Write-Host "警告: このアームは OpenAI API に課金される。5秒後に開始する。" -ForegroundColor Yellow
@@ -87,9 +102,10 @@ if ($Permissions -eq "bypass") {
 }
 
 # --- 経路プリフライト ----------------------------------------------------------
-# ローカル/OpenAI アームは fcc 経由なので、トンネルと fcc-server が生きている必要がある。
-# 落ちていれば起動する(fablet.ps1 と同じ手順)。Anthropic アームには不要。
-if ($cfg.backend -ne "anthropic") {
+# ローカルアームは fcc 経由なので、トンネルと fcc-server が生きている必要がある。
+# 落ちていれば起動する(fablet.ps1 と同じ手順)。
+# Anthropic アーム(本物の claude)と OpenAI アーム(LiteLLM 経由)には不要。
+if ($cfg.backend -eq "local") {
     try {
         Invoke-WebRequest -Uri "http://127.0.0.1:11500/api/version" -UseBasicParsing -TimeoutSec 2 | Out-Null
     } catch {
@@ -123,11 +139,8 @@ if ($cfg.backend -ne "anthropic") {
     $bare = $cfg.model -replace "^anthropic/", ""
     if ($models -notmatch [regex]::Escape($bare)) {
         Write-Host "中止: fcc が $($cfg.model) を公開していない。" -ForegroundColor Red
-        if ($cfg.backend -eq "local") {
-            Write-Host "      g24 にモデルが無い可能性: ollama list で確認し、IMPLEMENTATION.md の手順で作ること。" -ForegroundColor Red
-        } else {
-            Write-Host "      fcc が OpenAI モデルを公開していない。OPENAI_API_KEY を fcc プロセスが見えているか確認すること。" -ForegroundColor Red
-        }
+        Write-Host "      g24 にモデルが無いか、fcc が起動後に作られた可能性(fcc はモデル一覧を" -ForegroundColor Red
+        Write-Host "      起動時にキャッシュする)。ollama list で確認し、fcc-server を再起動すること。" -ForegroundColor Red
         exit 1
     }
     Write-Host "[OK] fcc 経路 (:8082) — $($cfg.model) を確認" -ForegroundColor Green
@@ -200,11 +213,16 @@ foreach ($taskDir in $taskDirs) {
         $t0 = Get-Date
         $timedOut = $false
 
-        # 権限。採点は外部の verify.py が行うため、タスクを解くのにシェルは要らない。
-        $permArgs = if ($Permissions -eq "bypass") {
-            @("--dangerously-skip-permissions")
-        } else {
-            @("--permission-mode", "acceptEdits", "--disallowedTools", "Bash")
+        # 権限。python モードは「編集 + python の実行だけ」を許す。
+        # allowedTools に Bash(python:*) を挙げつつ acceptEdits にすることで、
+        # python 以外のシェル呼び出し(git/rm/curl 等)は承認待ちになり、-p の非対話実行では
+        # 通らない。つまりホスト上で任意コマンドは走らないまま、検証ループだけが回る。
+        $permArgs = switch ($Permissions) {
+            "bypass" { @("--dangerously-skip-permissions") }
+            "edit"   { @("--permission-mode", "acceptEdits", "--disallowedTools", "Bash") }
+            "python" { @("--permission-mode", "acceptEdits",
+                         "--allowedTools", "Read", "Edit", "Write", "Glob", "Grep",
+                         "Bash(python:*)", "Bash(python3:*)") }
         }
 
         $agentArgs = @("-p", $prompt) + $permArgs + @("--model", $cfg.model)
@@ -212,12 +230,16 @@ foreach ($taskDir in $taskDirs) {
             $agentArgs += @("--append-system-prompt", (Get-Content $disciplineFile -Raw))
         }
 
-        # ローカル/OpenAI アームは fcc 経由。Anthropic アームは素の claude(本物)。
+        # local  : fcc(:8082)経由     openai: LiteLLM(:8083)経由
+        # anthropic: 素の claude(本物の Anthropic。環境変数を触らない)
         $envVars = @{}
-        if ($cfg.backend -ne "anthropic") {
+        if ($cfg.backend -eq "local") {
             $envVars["ANTHROPIC_BASE_URL"] = "http://127.0.0.1:8082"
             $envVars["ANTHROPIC_AUTH_TOKEN"] = "fablet-local"
             $envVars["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
+        } elseif ($cfg.backend -eq "openai") {
+            $envVars["ANTHROPIC_BASE_URL"] = $GPT_PROXY
+            $envVars["ANTHROPIC_AUTH_TOKEN"] = "fablet-local"   # LiteLLM 側のダミーキー
         }
 
         # 注意: エージェントの出力は *> でログファイルへ丸ごと落とす。PowerShell 5.1 で native
@@ -258,11 +280,12 @@ foreach ($taskDir in $taskDirs) {
             -ForegroundColor $(if ($passed) { "Green" } else { "Red" })
 
         $records += [pscustomobject]@{
-            task       = $taskName
-            try        = $i
-            arm        = $Arm
-            model      = $cfg.model
-            discipline = $cfg.discipline
+            task        = $taskName
+            try         = $i
+            arm         = $Arm
+            model       = $cfg.model
+            discipline  = $cfg.discipline
+            permissions = $Permissions
             passed     = $passed
             timed_out  = $timedOut
             elapsed_s  = $elapsed
@@ -278,12 +301,13 @@ $passAt1 = [math]::Round((($records | Where-Object passed).Count / $records.Coun
 $passAtK = [math]::Round((($byTask | Where-Object { $_.Group | Where-Object passed }).Count / $byTask.Count) * 100, 1)
 
 $summary = [pscustomobject]@{
-    run_id     = $runId
-    arm        = $Arm
-    model      = $cfg.model
-    discipline = $cfg.discipline
-    backend    = $cfg.backend
-    k          = $K
+    run_id      = $runId
+    arm         = $Arm
+    model       = $cfg.model
+    discipline  = $cfg.discipline
+    backend     = $cfg.backend
+    permissions = $Permissions   # 条件の違う結果を取り違えないため必ず残す
+    k           = $K
     tasks      = $byTask.Count
     trials     = $records.Count
     pass_at_1  = $passAt1

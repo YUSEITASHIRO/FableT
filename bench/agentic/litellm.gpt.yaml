@@ -1,0 +1,26 @@
+# LiteLLM 設定 — OpenAI を Claude Code から叩くための中継。
+#
+# なぜ必要か: fcc(free-claude-code)は無料プロバイダ専用のプロキシで、OpenAI のキーを
+# 受け付ける口が無い(2026-07-12 に実機で確認)。ベンチの前提は「全アームが同じ Claude Code
+# ハーネスで走ること」なので、Anthropic 形式(/v1/messages)を話せて OpenAI へ中継できる
+# プロキシが要る。LiteLLM がそれを担う。
+#
+# キーは環境変数 OPENAI_API_KEY から読む(この YAML には絶対に書かない)。
+
+model_list:
+  - model_name: gpt-5.4
+    litellm_params:
+      model: openai/gpt-5.4
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-5.4-mini
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  drop_params: true   # Anthropic 側にしか無いパラメータは落として OpenAI へ渡す
+
+general_settings:
+  # Claude Code は x-api-key を送る。中身は検証しないダミーで良い(ローカル専用の口)。
+  master_key: fablet-local
