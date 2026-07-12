@@ -89,11 +89,13 @@ $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = "80000"    # 131kまで使えるが、プ
 # 注意: allowlist は fcc が /v1/models で公開する ID と1対1で合わせる(CLAUDE.md 参照)。
 # bare 名だけだと「利用可能なエントリなし」でenforcementがスキップされ Default が素の Opus に
 # 化ける(2026-07-11)。prefixed と bare の併記は :latest 付きの重複行を生む(2026-07-12)。
+# --model のピンも allowlist に載っている ID と同一文字列にする。bare 名でピンすると
+# enforcement に弾かれて Default(opus tier = 120B)へ黙って落ちる(2026-07-12 実際に発生)。
 $fableSettings = Join-Path $here "fablet.settings.json"
 
 # /office と7エージェントはプラグインとして注入する。--plugin-dir はセッション限りなので、
 # どのプロジェクトディレクトリから起動しても .claude\ のコピー無しで /office が使える。
 $fablePlugin = Join-Path $here "plugin"
 
-Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model でモデル切替(fable-t / fable-t-mid)。`n" -ForegroundColor Cyan
-claude --settings $fableSettings --plugin-dir $fablePlugin --model "ollama/fable-t-mid" --append-system-prompt $fableCore @args
+Write-Host "`nFableT Office 起動。/office <依頼> で会議モード、/model を開いて一覧からモデル切替。`n" -ForegroundColor Cyan
+claude --settings $fableSettings --plugin-dir $fablePlugin --model "anthropic/ollama/fable-t-mid" --append-system-prompt $fableCore @args

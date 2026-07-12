@@ -22,7 +22,9 @@ IMPLEMENTATION.md を参照。
   fablet.settings.json(availableModels + enforceAvailableModels)を
   --settings で注入するため、/model で選べるのはこの3名称のみ。
   Opus/Sonnet/Haiku の組込みエントリは選択不能、Default は fable-t-mid。
-  切替は `/model ollama/fable-t` のように名前で行う。fcc の tier 変換
+  切替は `/model` を開いて一覧から選ぶ(名前指定は allowlist と同一文字列、
+  例 `/model anthropic/ollama/fable-t`。bare 名は弾かれ Default へ落ちる)。
+  fcc の tier 変換
   (~/.fcc/.env)は内部処理用に維持: opus → `fable-t`、sonnet/haiku →
   `fable-t-mid`。allowlist は fcc が /v1/models で公開する ID に合わせること:
   bare 名だけだと「利用可能なし」で enforcement がスキップされ、逆に prefixed と

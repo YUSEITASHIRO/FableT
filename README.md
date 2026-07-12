@@ -56,8 +56,9 @@ fablet                          # ② 起動([OK]が3つ並ぶのを確認)
 | `fable-t` | gpt-oss:120b(120B) | 難しい設計判断・複雑なバグ向け。賢い |
 | `fable-t-o` | `fable-t` と同じ重み | `/office` の7役が自動で使う。**自分で選ぶ必要はない** |
 
-- **選べるのはこの3つだけ。** 起動時に `fablet.settings.json` の allowlist(`availableModels` + `enforceAvailableModels`)が適用され、`Opus` / `Sonnet` / `Haiku` といった紛らわしい組込みエントリは選択不能になる。`Default` も `fable-t-mid` に解決される
-- 切替は名前で指定する: `/model ollama/fable-t`(120Bへ)/ `/model ollama/fable-t-mid`(30Bへ戻す)
+- **選べるのはこの3つだけ。** 起動時に `fablet.settings.json` の allowlist(`availableModels` + `enforceAvailableModels`)が適用され、`Opus` / `Sonnet` / `Haiku` といった紛らわしい組込みエントリは一覧から消える
+- 切替は `/model` を開いて一覧から選ぶ。名前で指定する場合は一覧と同じ完全なIDで: `/model anthropic/ollama/fable-t`(120Bへ)/ `/model anthropic/ollama/fable-t-mid`(30Bへ戻す)。短い名前(`ollama/fable-t` 等)は allowlist に一致せず Default に落ちるので使わない
+- 組込みの `Default` 行だけは消せず、表示上は Opus 4.8 のままになることがある。**ただし fablet セッションは接続先自体がローカルプロキシなので、どれを選んでもクレジットは消費されない**(Default は opus 枠 = `fable-t` に変換される)
 - この制限は `fablet` で起動したセッション限り。素の `claude`(本物のAnthropic)には影響しない
 - 両モデルは GPU に同時常駐するので、切替でロード待ちは発生しない(96GB VRAM の場合)
 
