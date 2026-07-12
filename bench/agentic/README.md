@@ -95,9 +95,12 @@ Groq 等)。2026-07-12 にキーを渡して実機確認したが、OpenAI モ�
   (表示しない・ファイルに書かない・コミットしない)。プロキシは 127.0.0.1 のみに口を開く。
   **測定が終わったらプロキシの窓を閉じること**(キーを持ったプロセスを放置しない)。
 - run.ps1 は起動前にプロキシの生存を確認し、居なければ中止する(黙って別モデルを測らないため)。
-- **未検証**: LiteLLM が Claude Code の `/v1/messages` をそのまま受けられるかは、まだ実際に
-  通していない(このコードは作成のみで、実行はしていない)。初回起動時にここで詰まる可能性がある。
-  詰まった場合は litellm のバージョンと `/v1/messages` 対応状況を確認すること。
+- **疎通確認済み(2026-07-12)**: LiteLLM は Claude Code と同じ Anthropic 形式(`/v1/messages`)を
+  受けて OpenAI へ中継できる(`gpt-5.4-mini` に "Reply with exactly: ok" を投げて "ok" が返った)。
+- 日本語 Windows で3つ踏むので、gpt-proxy.ps1 に対処を入れてある:
+  ① `uv tool install` は `--python 3.12` を指定する(既定の 3.14 はホイールが無くビルドに落ちる)
+  ② `litellm.gpt.yaml` は **ASCII のみ**にする(PyYAML が cp932 で読んで UnicodeDecodeError)
+  ③ `PYTHONIOENCODING=utf-8` を設定する(起動バナーのブロック文字が cp932 に書けず落ちる)
 
 ## これまでの実測(2026-07-12)
 

@@ -1,11 +1,11 @@
-# LiteLLM 設定 — OpenAI を Claude Code から叩くための中継。
+# LiteLLM config -- bridges the Claude Code harness to the OpenAI API.
 #
-# なぜ必要か: fcc(free-claude-code)は無料プロバイダ専用のプロキシで、OpenAI のキーを
-# 受け付ける口が無い(2026-07-12 に実機で確認)。ベンチの前提は「全アームが同じ Claude Code
-# ハーネスで走ること」なので、Anthropic 形式(/v1/messages)を話せて OpenAI へ中継できる
-# プロキシが要る。LiteLLM がそれを担う。
+# ASCII ONLY. PyYAML reads this file with the process default encoding; on a Japanese
+# Windows that is cp932, and any non-ASCII byte here kills the proxy at startup with
+# UnicodeDecodeError (hit for real on 2026-07-12). Keep every comment in ASCII.
+# The Japanese rationale lives in gpt-proxy.ps1 and bench/agentic/README.md.
 #
-# キーは環境変数 OPENAI_API_KEY から読む(この YAML には絶対に書かない)。
+# The API key comes from the OPENAI_API_KEY environment variable. Never write it here.
 
 model_list:
   - model_name: gpt-5.4
@@ -19,8 +19,7 @@ model_list:
       api_key: os.environ/OPENAI_API_KEY
 
 litellm_settings:
-  drop_params: true   # Anthropic 側にしか無いパラメータは落として OpenAI へ渡す
+  drop_params: true   # drop Anthropic-only params instead of erroring out
 
 general_settings:
-  # Claude Code は x-api-key を送る。中身は検証しないダミーで良い(ローカル専用の口)。
-  master_key: fablet-local
+  master_key: fablet-local   # dummy; the proxy listens on 127.0.0.1 only

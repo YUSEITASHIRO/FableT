@@ -53,13 +53,21 @@ Write-Host "[OK] OPENAI_API_KEY を読み込んだ(このプロセス限り。�
 
 # --- LiteLLM の導入確認 ---
 # uv 管理下に入れる(このプロジェクトは fcc も uv tool で入れている)。
+# --python 3.12 を指定すること: uv の既定(3.14)にはビルド済みホイールが無く、Rust 拡張の
+# ソースビルドに落ちて失敗する(2026-07-12 実際に発生)。
 if (-not (Get-Command litellm -ErrorAction SilentlyContinue)) {
     Write-Host "[..] litellm が無い — uv tool でインストールする" -ForegroundColor Yellow
-    uv tool install "litellm[proxy]"
+    uv tool install --python 3.12 "litellm[proxy]"
     if (-not (Get-Command litellm -ErrorAction SilentlyContinue)) {
-        throw 'litellm のインストールに失敗した。手動で: uv tool install "litellm[proxy]"'
+        throw 'litellm のインストールに失敗した。手動で: uv tool install --python 3.12 "litellm[proxy]"'
     }
 }
+
+# litellm は起動バナーにブロック文字(U+2588)を出す。日本語 Windows の既定の標準出力は
+# cp932 なので、そのままだと UnicodeEncodeError で起動に失敗する(2026-07-12 実際に発生)。
+# Python の I/O を UTF-8 に固定して回避する。
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 Write-Host "`nGPT 中継プロキシを起動する: $base" -ForegroundColor Cyan
 Write-Host "この窓を閉じると止まる(キーを持ったプロセスを放置しないこと)。`n" -ForegroundColor DarkGray
