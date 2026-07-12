@@ -56,10 +56,12 @@ if ($ok) {
     try {
         $freeMiB = [int](ssh g24 "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits" | Select-Object -First 1)
         $freeGiB = [math]::Round($freeMiB / 1024, 0)
-        if ($freeMiB -lt 24000) {
-            Write-Host "[!!] GPU 空き ${freeGiB}GiB — 30B(fable-t-mid, 22GiB)すら載らない。他ユーザーの使用状況を ./vram.sh で確認すること" -ForegroundColor Red
+        # 閾値は実測に合わせる: 空き 22.3GiB で 30B は 100% GPU に載った(2026-07-12)。
+        # 余裕を見て 22GiB を下限とする。
+        if ($freeMiB -lt 22000) {
+            Write-Host "[!!] GPU 空き ${freeGiB}GiB — 30B(fable-t-mid, 22GiB)も載らない。他ユーザーの使用状況を ./vram.sh で確認すること" -ForegroundColor Red
         } elseif ($freeMiB -lt 72000) {
-            Write-Host "[!] GPU 空き ${freeGiB}GiB — 120B(fable-t, 69GiB)は CPU へスピルして激遅になる。fable-t-mid(既定)で作業し、/office のフル予算は空くまで待つこと" -ForegroundColor Yellow
+            Write-Host "[!] GPU 空き ${freeGiB}GiB — 30B(既定)は動くが、120B(fable-t, 69GiB)は CPU へスピルして激遅になる。/office のフル予算は空くまで待つこと" -ForegroundColor Yellow
         } else {
             Write-Host "[OK] GPU 空き ${freeGiB}GiB (120B/30B とも常駐可)" -ForegroundColor Green
         }

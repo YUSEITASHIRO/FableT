@@ -49,8 +49,9 @@ if ($Agent -eq "claude") {
 # (2026-07-12: 空き 0GiB で全試行 9 秒 FAIL、という無意味な結果を実際に出した)。
 if ($Agent -eq "fablet") {
     try {
+        # 22GiB あれば既定の 30B は 100% GPU に載る(実測)。それ未満は測定にならない。
         $freeMiB = [int](ssh g24 "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits" | Select-Object -First 1)
-        if ($freeMiB -lt 24000) {
+        if ($freeMiB -lt 22000) {
             Write-Host ("中止: g24 の GPU 空きが {0}GiB しかない。モデルがロードできず、測定結果が意味を持たない。" -f [math]::Round($freeMiB / 1024, 0)) -ForegroundColor Red
             Write-Host "      ./vram.sh で誰が使っているか確認し、空いてから再実行すること。" -ForegroundColor Red
             exit 1
