@@ -1,0 +1,16 @@
+# raw-gptoss — 対照群。fable-t から「規律」だけを外したもの。
+#
+# fable-t との違いは Reasoning のみ:
+#   fable-t   : TEMPLATE を書き換えて Reasoning: high に固定
+#   raw-gptoss: gpt-oss の既定テンプレートのまま(= Ollama が medium を注入する)
+#
+# num_ctx / temperature は fable-t と揃えてある。ここを揃えないと「規律の効果」ではなく
+# 「文脈長の差」を測ってしまう(Ollama の既定 num_ctx は 4096 で、エージェント用途には狭すぎる)。
+#
+# ベンチではさらに、このモデルを使うアームには fable-coding.txt(思考規律の system prompt)を
+# 注入しない。つまり raw-gptoss アーム = 素の gpt-oss:120b + 素のハーネス。
+
+FROM gpt-oss:120b
+
+PARAMETER num_ctx 131072
+PARAMETER temperature 1.0

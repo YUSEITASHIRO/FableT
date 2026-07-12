@@ -1,0 +1,10 @@
+# raw-qwen — 対照群。fable-t-mid と同じ重み・同じパラメータで、思考規律を注入しないアーム用。
+#
+# fable-t-mid と設定は同一(qwen3:30b-a3b, num_ctx 65536, temperature 0.7)。
+# 違いはベンチでの使われ方だけ: このモデルを使うアームには fable-coding.txt を注入しない。
+# 設定を揃えることで「規律(system prompt)の効果」だけを取り出す。
+
+FROM qwen3:30b-a3b
+
+PARAMETER num_ctx 65536
+PARAMETER temperature 0.7

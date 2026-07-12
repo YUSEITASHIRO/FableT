@@ -1,0 +1,20 @@
+money.py の丸め処理が docstring の仕様どおりでない。Python 組込みの round() は
+「銀行家丸め」(ちょうど 0.5 のとき偶数側へ)であって、四捨五入ではない。
+また split_bill は各人を同額にしているため、合計が total_yen と一致しない。
+
+次を満たすように直してほしい。
+
+1. apply_tax(amount_yen, tax_rate) は amount_yen * (1 + tax_rate) を四捨五入した整数を返す。
+   **ちょうど 0.5 のときは必ず切り上げる**(銀行家丸めにしない)。
+   float の丸め誤差に依存しないよう、decimal.Decimal を使って計算すること。
+     apply_tax(10, 0.05)  -> 10.5   -> 11   (組込み round() だと 10 になってしまう)
+     apply_tax(105, 0.05) -> 110.25 -> 110
+     apply_tax(101, 0.05) -> 106.05 -> 106
+
+2. split_bill(total_yen, people) は各人の請求額(整数)のリストを返す。
+   **合計はちょうど total_yen** になること。端数の1円は先頭の人から順に負担させる。
+     split_bill(1000, 3) -> [334, 333, 333]
+     split_bill(100, 3)  -> [34, 33, 33]
+     split_bill(90, 3)   -> [30, 30, 30]
+
+3. people が 0 以下なら ValueError。total_yen が負なら ValueError。

@@ -23,7 +23,7 @@ function Release-G24 {
     Write-Host "`n[..] g24 のモデルを解放中..." -ForegroundColor DarkGray
     try {
         $ol = "OLLAMA_HOST=127.0.0.1:11500 `$HOME/ollama-dist/bin/ollama"
-        ssh g24 "for m in fable-t fable-t-mid fable-t-o fablet-fast fablet-chat; do $ol stop `$m 2>/dev/null; done; $ol ps" | Out-Null
+        ssh g24 "for m in fable-t fable-t-mid fable-t-o raw-gptoss raw-qwen fablet-fast fablet-chat; do $ol stop `$m 2>/dev/null; done; $ol ps" | Out-Null
         $remaining = (ssh g24 "$ol ps" | Select-Object -Skip 1) -join ""
         if ([string]::IsNullOrWhiteSpace($remaining)) {
             Write-Host "[OK] g24 のモデルをアンロードした(VRAM 解放済み)" -ForegroundColor Green

@@ -1,0 +1,14 @@
+page.py のページングがずれている。page は1始まりの仕様なのに 0 始まりとして計算しているため、
+1ページ目が2ページ目の内容を返してしまう。また page_count が端数を切り捨てている。
+
+次を満たすように直してほしい。
+
+1. paginate(items, page, per_page) は **1始まり**の page 番号で切り出す。
+     paginate([1,2,3,4,5], 1, 2) -> [1, 2]
+     paginate([1,2,3,4,5], 3, 2) -> [5]
+2. 範囲外のページ(存在しないページ番号)は空リストを返す。
+     paginate([1,2,3], 9, 2) -> []
+3. page_count(total, per_page) は端数を切り上げた総ページ数を返す。
+     page_count(5, 2) -> 3、page_count(4, 2) -> 2、page_count(0, 2) -> 0
+4. page が 1 未満、または per_page が 1 未満なら ValueError を送出すること
+   (page_count は per_page のみ検査する)。
