@@ -24,8 +24,12 @@ IMPLEMENTATION.md を参照。
   Opus/Sonnet/Haiku の組込みエントリは選択不能、Default は fable-t-mid。
   切替は `/model ollama/fable-t` のように名前で行う。fcc の tier 変換
   (~/.fcc/.env)は内部処理用に維持: opus → `fable-t`、sonnet/haiku →
-  `fable-t-mid`。allowlist には fcc 公開 ID(anthropic/ollama/... 付き)と
-  bare 名の両方を載せること(片方だけだと enforcement がスキップされる)。
+  `fable-t-mid`。allowlist は fcc が /v1/models で公開する ID に合わせること:
+  bare 名だけだと「利用可能なし」で enforcement がスキップされ、逆に prefixed と
+  bare を併記すると同一モデルが `:latest` 付きで重複表示される。fcc は各モデルを
+  `anthropic/ollama/<名前>` と `…:latest` の両形で公開する(fable-t-o のみ
+  :latest 形だけ)ため、fable-t / fable-t-mid は prefixed 形、fable-t-o は
+  bare 形(エージェント frontmatter と同一文字列)を1つずつ載せる。
 - `/office` と7エージェントは plugin/ ディレクトリ(--plugin-dir で注入)
   にある。どのプロジェクトから fablet を起動しても利用可能。7役は全員
   `model: ollama/fable-t-o` を直接指定し、役ごとに分けず同じモデルで発言する。

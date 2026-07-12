@@ -86,9 +86,9 @@ $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = "80000"    # 131kまで使えるが、プ
 # (fablet.settings.json) により、Opus/Sonnet/Haiku 等の組込みエントリは選択不能になり、
 # Default も allowlist 先頭(fable-t-mid)へ解決される。--settings はこのセッション
 # 限りなので、素の claude(本物のAnthropic)には影響しない。
-# 注意: allowlist には fcc が /v1/models で公開する ID(anthropic/ollama/... プレフィクス付き)
-# と bare 名の両方を載せる。片方だけだと「利用可能なエントリなし」と判定されて
-# enforcement がスキップされ、Default が素の Opus に化ける(2026-07-11 実際に発生)。
+# 注意: allowlist は fcc が /v1/models で公開する ID と1対1で合わせる(CLAUDE.md 参照)。
+# bare 名だけだと「利用可能なエントリなし」でenforcementがスキップされ Default が素の Opus に
+# 化ける(2026-07-11)。prefixed と bare の併記は :latest 付きの重複行を生む(2026-07-12)。
 $fableSettings = Join-Path $here "fablet.settings.json"
 
 # /office と7エージェントはプラグインとして注入する。--plugin-dir はセッション限りなので、
