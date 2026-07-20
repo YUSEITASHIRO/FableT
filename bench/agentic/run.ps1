@@ -280,29 +280,46 @@ foreach ($taskDir in $taskDirs) {
         #       → 毎ラウンド、課題文の入出力例をそのままアサートせよと明示し、
         #         コードに合わせた期待値の書き換え・docstring改変を禁じる。
         if ($cfg.loop -and -not $timedOut) {
+            # 公開例テスト(あれば)。prompt.txt に既に書かれている入出力例だけを
+            # 実行可能にしたもので、隠しテスト(verify.py)ではない。モデルが自作テストに
+            # 要件を書き漏らしても、ハーネスが公開例で必ず捕まえるための「網羅性の下限」。
+            $examplesFile = Join-Path $taskDir "examples.py"
+            $hasExamples = Test-Path $examplesFile
+
             foreach ($round in 1..3) {
-                $testFiles = @(Get-ChildItem -Path $work -File -Filter "*.py" |
-                    Where-Object { $_.Name -match '(^test.*|.*_test)\.py$' })
                 $ruleG = "テストは課題文に書かれた入出力例(エッジケースを含む)を一字一句そのままアサートすること。" +
                          "自分のコードの出力に合わせて期待値を書き換えたり、docstring を壊れた挙動に合わせて書き換えるのは禁止(それは修正ではない)。"
-                if ($testFiles.Count -eq 0) {
-                    $fb = "テストファイルがまだ無い。課題文の要件を網羅する test_check.py を書き、python で実行し、全て通るまで実装本体を直すこと。$ruleG"
+
+                # (1) 公開例テストを最優先で判定材料にする。ここが緑でないうちは終わらない。
+                $exOk = $true; $exOut = ""
+                if ($hasExamples) {
+                    Push-Location $work
+                    try { $o = & python $examplesFile 2>&1; $exOk = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
+                    $exOut = ($o | Out-String)
+                }
+
+                # (2) モデル自作のテスト(名前は固定できないので広く拾う)。
+                $testFiles = @(Get-ChildItem -Path $work -File -Filter "*.py" |
+                    Where-Object { $_.Name -match '(^test.*|.*_test)\.py$' })
+                $tOk = $true; $tOut = ""
+                foreach ($tf in $testFiles) {
+                    Push-Location $work
+                    try { $o = & python $tf.FullName 2>&1; $ok = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
+                    $tOut += "`n# $($tf.Name)`n" + ($o | Out-String)
+                    if (-not $ok) { $tOk = $false }
+                }
+
+                if ($hasExamples -and -not $exOk) {
+                    # 公開例が落ちている = 要件未達が確定。最優先で具体的に差し戻す。
+                    $fb = "課題文に書かれた入出力例のうち、まだ満たせていないものがある。落ちた例:`n" + $exOut +
+                          "`nこれらを満たすよう実装本体を直し、あなたのテストにもこの入力を全て含めて python で確認すること。$ruleG"
+                } elseif ($testFiles.Count -eq 0) {
+                    $fb = "テストファイルがまだ無い。課題文の要件(番号付き要件と例を全て)を網羅する test_check.py を書き、python で実行し、全て通るまで実装本体を直すこと。$ruleG"
+                } elseif (-not $tOk) {
+                    $fb = "テストが失敗している。出力:`n" + $tOut + "`n実装本体を直し、全て通るまで繰り返すこと。$ruleG"
                 } else {
-                    $tOk = $true; $tOut = ""
-                    foreach ($tf in $testFiles) {
-                        Push-Location $work
-                        try { $o = & python $tf.FullName 2>&1; $ok = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
-                        $tOut += "`n# $($tf.Name)`n" + ($o | Out-String)
-                        if (-not $ok) { $tOk = $false }
-                    }
-                    if ($tOk) {
-                        # 緑でも早期終了しない。誤ったテストで緑になる罠があるため、
-                        # 最終ラウンド以外は「例と突き合わせて自己点検せよ」と一度促す。
-                        if ($round -ge 2) { break }
-                        $fb = "テストは通っているが、そのテストが課題文の入出力例と完全に一致しているか自己点検すること。$ruleG 一致していない箇所があれば実装を直すこと。"
-                    } else {
-                        $fb = "テストが失敗している。出力:`n" + $tOut + "`n実装本体を直し、全て通るまで繰り返すこと。$ruleG"
-                    }
+                    # 公開例も自作テストも緑。ここで初めて完了とみなす。
+                    break
                 }
                 $fixArgs = @("-p", ($prompt + "`n`n[検証ラウンド $round] " + $fb)) + $permArgs + @("--model", $cfg.model)
                 if ($cfg.discipline) { $fixArgs += @("--append-system-prompt", (Get-Content $disciplineFile -Raw)) }
