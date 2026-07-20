@@ -1,0 +1,29 @@
+﻿{
+    "run_id":  "fable-t-mid-k1-20260720-154749",
+    "arm":  "fable-t-mid",
+    "model":  "anthropic/ollama/fable-t-mid",
+    "discipline":  true,
+    "backend":  "local",
+    "permissions":  "python",
+    "k":  1,
+    "tasks":  1,
+    "trials":  1,
+    "pass_at_1":  0,
+    "pass_at_k":  0,
+    "median_s":  55.5,
+    "records":  [
+                    {
+                        "task":  "interval-merge",
+                        "try":  1,
+                        "arm":  "fable-t-mid",
+                        "model":  "anthropic/ollama/fable-t-mid",
+                        "discipline":  true,
+                        "permissions":  "python",
+                        "passed":  false,
+                        "timed_out":  false,
+                        "elapsed_s":  55.5,
+                        "verify_out":  "FAIL\n  - touching: got [(1, 3), (3, 5)], want [(1, 5)]\n  - list input: 例外 TypeError: \u0027\u003c\u0027 not supported between instances of \u0027tuple\u0027 and \u0027list\u0027\n  - inverted: ValueError が送出されなかった",
+                        "agent_out":  "claude.exe : \u001b[33m笞 claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and take\r\ns precedence over your claude.ai login ﾂｷ Unset it to load your organization\u0027s connectors\u001b[39m\r\n発生場所 行:6 文字:13\r\n+             \u0026 claude @agentArgs *\u003e $log\r\n+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (\u001b[33m笞 claude....connectors\u001b[39m:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n```python\r\ndef merge_intervals(intervals):\r\n    \"\"\"\r\n    Merge overlapping or adjacent intervals.\r\n\r\n    Args:\r\n        intervals (list of lists or tuples): Each interval is [start, end] with start \u003c= end.\r\n\r\n    Returns:\r\n        list: Merged intervals sorted by start.\r\n\r\n    Raises:\r\n        ValueError: If any interval has start \u003e end.\r\n    \"\"\"\r\n    # Validate each interval\r\n    for start, end in intervals:\r\n        if start \u003e end:\r\n            raise ValueError(\"start must be \u003c= end in interval\")\r\n    \r\n    # Sort intervals by start time\r\n    intervals.sort(key=lambda x: x[0])\r\n    \r\n    merged = []\r\n    for interval in intervals:\r\n        # If merged is empty or current interval doesn\u0027t overlap\r\n        if not merged or interval[0] \u003e merged[-1][1]:\r\n            merged.append(interval)\r\n        else:\r\n            # Merge by extending the end if needed\r\n            merged[-1][1] = max(merged[-1][1], interval[1])\r\n    \r\n    return merged\r\n```\r\n"
+                    }
+                ]
+}
