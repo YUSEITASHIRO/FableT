@@ -270,18 +270,39 @@ foreach ($taskDir in $taskDirs) {
         }
         Remove-Job $job -Force
 
-        # 強制検証ループ(loop アーム)。ハーネスが test_scratch.py の存在と合否を検査し、
+        # 強制検証ループ(loop アーム)。ハーネスが「テストの存在と合否」を検査し、
         # 足りなければ修正指示を再投入する。隠しテスト(verify.py)は一切見せない。
+        #
+        # 30B の実測(RESULTS.md 07-20)で判明した2つの失敗を潰す設計:
+        #   (A) テスト名は固定できない(モデルは test_<module>.py 等を勝手に付ける)
+        #       → work 内の test*.py / *_test.py を全部拾う。
+        #   (B) モデルは「壊れた実装に合わせた誤ったテスト」を書き、緑にして誤魔化す
+        #       → 毎ラウンド、課題文の入出力例をそのままアサートせよと明示し、
+        #         コードに合わせた期待値の書き換え・docstring改変を禁じる。
         if ($cfg.loop -and -not $timedOut) {
             foreach ($round in 1..3) {
-                $scratch = Join-Path $work "test_scratch.py"
-                if (-not (Test-Path $scratch)) {
-                    $fb = "test_scratch.py がまだ無い。課題文の要件(エッジケース含む)を網羅する test_scratch.py を書き、python test_scratch.py で実行し、全て通るまで実装を修正すること。"
+                $testFiles = @(Get-ChildItem -Path $work -File -Filter "*.py" |
+                    Where-Object { $_.Name -match '(^test.*|.*_test)\.py$' })
+                $ruleG = "テストは課題文に書かれた入出力例(エッジケースを含む)を一字一句そのままアサートすること。" +
+                         "自分のコードの出力に合わせて期待値を書き換えたり、docstring を壊れた挙動に合わせて書き換えるのは禁止(それは修正ではない)。"
+                if ($testFiles.Count -eq 0) {
+                    $fb = "テストファイルがまだ無い。課題文の要件を網羅する test_check.py を書き、python で実行し、全て通るまで実装本体を直すこと。$ruleG"
                 } else {
-                    Push-Location $work
-                    try { $tOut = & python $scratch 2>&1; $tOk = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
-                    if ($tOk) { break }
-                    $fb = "test_scratch.py が失敗している。出力:`n" + (($tOut | Out-String)) + "`n実装を直し、全て通るまで python test_scratch.py を繰り返すこと。要件の削除・テストの弱体化は禁止。"
+                    $tOk = $true; $tOut = ""
+                    foreach ($tf in $testFiles) {
+                        Push-Location $work
+                        try { $o = & python $tf.FullName 2>&1; $ok = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
+                        $tOut += "`n# $($tf.Name)`n" + ($o | Out-String)
+                        if (-not $ok) { $tOk = $false }
+                    }
+                    if ($tOk) {
+                        # 緑でも早期終了しない。誤ったテストで緑になる罠があるため、
+                        # 最終ラウンド以外は「例と突き合わせて自己点検せよ」と一度促す。
+                        if ($round -ge 2) { break }
+                        $fb = "テストは通っているが、そのテストが課題文の入出力例と完全に一致しているか自己点検すること。$ruleG 一致していない箇所があれば実装を直すこと。"
+                    } else {
+                        $fb = "テストが失敗している。出力:`n" + $tOut + "`n実装本体を直し、全て通るまで繰り返すこと。$ruleG"
+                    }
                 }
                 $fixArgs = @("-p", ($prompt + "`n`n[検証ラウンド $round] " + $fb)) + $permArgs + @("--model", $cfg.model)
                 if ($cfg.discipline) { $fixArgs += @("--append-system-prompt", (Get-Content $disciplineFile -Raw)) }
