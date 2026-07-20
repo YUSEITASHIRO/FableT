@@ -21,7 +21,7 @@ param(
     #   opus         Claude Opus 4.8(本物の Anthropic)
     #   sonnet       Claude Sonnet(本物の Anthropic)
     #   gpt / gpt-mini  OpenAI モデル(gpt-proxy.ps1 が立てる LiteLLM 経由。OPENAI_API_KEY が必要)
-    [ValidateSet("fable-t", "fable-t-mid", "raw-gptoss", "raw-qwen", "opus", "sonnet", "gpt", "gpt-mini")]
+    [ValidateSet("fable-t", "fable-t-mid", "fable-t-loop", "fable-t-mid-loop", "raw-gptoss", "raw-qwen", "opus", "sonnet", "gpt", "gpt-mini")]
     [string]$Arm = "fable-t",
 
     [int]$K = 1,
@@ -55,6 +55,11 @@ $repoRoot = Resolve-Path (Join-Path $here "..\..")
 $arms = @{
     "fable-t"     = @{ backend = "local";     model = "anthropic/ollama/fable-t";     discipline = $true;  note = "120B + Reasoning:high + 規律" }
     "fable-t-mid" = @{ backend = "local";     model = "anthropic/ollama/fable-t-mid"; discipline = $true;  note = "30B + 規律" }
+    # loop アーム: モデルが自発的にテストを書かない実測(RESULTS.md 07-20)へのハーネス側対策。
+    # test_scratch.py が無ければ書かせ、失敗していれば出力を貼って直させる(最大3ラウンド)。
+    # 「品質は賢さではなく試行回数で買う」の -p 単発版。
+    "fable-t-loop"     = @{ backend = "local"; model = "anthropic/ollama/fable-t";     discipline = $true; loop = $true; note = "120B + 規律 + 強制検証ループ" }
+    "fable-t-mid-loop" = @{ backend = "local"; model = "anthropic/ollama/fable-t-mid"; discipline = $true; loop = $true; note = "30B + 規律 + 強制検証ループ" }
     # 注意: fcc が公開する ID をそのまま書くこと(綴りが違うと黙って Default に落ちる)。
     # raw-* は :latest 付きの形でしか公開されない。また fcc はモデル一覧を起動時にキャッシュ
     # するので、g24 にモデルを作ったら fcc-server を再起動しないと見えない(2026-07-12 に遭遇)。
@@ -264,6 +269,34 @@ foreach ($taskDir in $taskDirs) {
             $agentOut = "(timeout after ${TimeoutSec}s)"
         }
         Remove-Job $job -Force
+
+        # 強制検証ループ(loop アーム)。ハーネスが test_scratch.py の存在と合否を検査し、
+        # 足りなければ修正指示を再投入する。隠しテスト(verify.py)は一切見せない。
+        if ($cfg.loop -and -not $timedOut) {
+            foreach ($round in 1..3) {
+                $scratch = Join-Path $work "test_scratch.py"
+                if (-not (Test-Path $scratch)) {
+                    $fb = "test_scratch.py がまだ無い。課題文の要件(エッジケース含む)を網羅する test_scratch.py を書き、python test_scratch.py で実行し、全て通るまで実装を修正すること。"
+                } else {
+                    Push-Location $work
+                    try { $tOut = & python $scratch 2>&1; $tOk = ($LASTEXITCODE -eq 0) } finally { Pop-Location }
+                    if ($tOk) { break }
+                    $fb = "test_scratch.py が失敗している。出力:`n" + (($tOut | Out-String)) + "`n実装を直し、全て通るまで python test_scratch.py を繰り返すこと。要件の削除・テストの弱体化は禁止。"
+                }
+                $fixArgs = @("-p", ($prompt + "`n`n[検証ラウンド $round] " + $fb)) + $permArgs + @("--model", $cfg.model)
+                if ($cfg.discipline) { $fixArgs += @("--append-system-prompt", (Get-Content $disciplineFile -Raw)) }
+                $job2 = Start-Job -ScriptBlock {
+                    param($work, $agentArgs, $log, $envVars)
+                    $ErrorActionPreference = "Continue"
+                    foreach ($k in $envVars.Keys) { Set-Item -Path "env:$k" -Value $envVars[$k] }
+                    Set-Location $work
+                    & claude @agentArgs *> $log
+                } -ArgumentList $work, $fixArgs, "$log.round$round", $envVars
+                if (-not (Wait-Job $job2 -Timeout $TimeoutSec)) { Stop-Job $job2; $timedOut = $true }
+                Remove-Job $job2 -Force
+                if ($timedOut) { break }
+            }
+        }
 
         $elapsed = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
 
