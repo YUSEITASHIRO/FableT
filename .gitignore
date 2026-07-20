@@ -5,6 +5,9 @@
 
 # ローカル生成物
 *.log
+__pycache__/
+*.pyc
+.claude/worktrees/
 
 # ベンチの実行結果(各自の環境の実測値。共有したいものだけ手で追加する)
 bench/agentic/results/*.json
