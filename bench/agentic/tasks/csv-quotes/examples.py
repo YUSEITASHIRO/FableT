@@ -18,6 +18,15 @@ def expect(name, fn, want):
         fails.append(f"{name}: got {got!r}, want {want!r}")
 
 
+# prompt.txt 明記のポリシー: 標準ライブラリの csv は使わない。
+# これを入れないと、モデルが csv.reader で例だけ通して制約を迂回するズルを見逃す
+# (2026-07-20 実測で発生)。ポリシーも公開契約なのでここで機械的に確認する。
+_src = open("csvlite.py", encoding="utf-8").read()
+if "import csv" in _src or "from csv " in _src:
+    print("FAIL (公開例): 標準ライブラリの csv モジュールを使っている(課題文で禁止)。"
+          "自前で引用符・エスケープ・未終端を処理すること。")
+    sys.exit(1)
+
 try:
     from csvlite import parse_line
 except Exception as e:  # noqa: BLE001
